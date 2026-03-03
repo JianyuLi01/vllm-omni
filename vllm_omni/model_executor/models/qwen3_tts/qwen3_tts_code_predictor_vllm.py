@@ -176,6 +176,7 @@ class _LocalPredictorKVCache:
                 num_tokens=num_tokens,
                 query_start_loc_gpu=query_start_loc_gpu,
                 query_start_loc_cpu=qsl,
+                max_query_len=max_query_len,
                 seq_lens=seq_lens_gpu,
                 max_seq_len=max_seq_len,
                 block_tables=[block_table],
