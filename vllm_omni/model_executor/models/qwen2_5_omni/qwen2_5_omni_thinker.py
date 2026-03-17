@@ -58,10 +58,6 @@ from vllm.multimodal.inputs import (
     MultiModalKwargsItems,
 )
 from vllm.multimodal.parse import MultiModalDataItems
-from vllm.multimodal.processing import (
-    ProcessorInputs,
-    TimingContext,
-)
 from vllm.multimodal.processing.processor import (
     MultiModalPromptUpdates,
     PlaceholderFeaturesInfo,
@@ -79,16 +75,6 @@ class Qwen2_5OmniThinkerMultiModalProcessor(
     _Qwen2_5OmniThinkerMultiModalProcessorBase,
 ):
     """Override to fix use_audio_in_video detection when mm cache returns None."""
-
-    def _cached_apply_hf_processor(
-        self,
-        inputs: ProcessorInputs,
-        timing_ctx: TimingContext,
-    ):
-        mm_processor_kwargs = inputs.hf_processor_mm_kwargs
-        if mm_processor_kwargs.get("use_audio_in_video", False):
-            return self._apply_hf_processor(inputs, timing_ctx)
-        return super()._cached_apply_hf_processor(inputs, timing_ctx)
 
     def _maybe_apply_prompt_updates(
         self,
