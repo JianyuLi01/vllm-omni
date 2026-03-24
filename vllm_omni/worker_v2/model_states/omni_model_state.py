@@ -89,6 +89,7 @@ class OmniModelState(DefaultModelState):
         buffer_list = self.intermediate_buffer.gather(input_batch)
         base["model_intermediate_buffer"] = buffer_list
         base["runtime_additional_information"] = buffer_list
+        base["seq_token_counts"] = [int(input_batch.num_scheduled_tokens[i]) for i in range(input_batch.num_reqs)]
         for plugin in self.plugins:
             base.update(plugin.prepare_extra_inputs(input_batch, req_states))
         return base
@@ -98,6 +99,14 @@ class OmniModelState(DefaultModelState):
         dummy_buffer = [{} for _ in range(num_reqs)]
         base["model_intermediate_buffer"] = dummy_buffer
         base["runtime_additional_information"] = dummy_buffer
+        if num_reqs > 0:
+            per_req = num_tokens // num_reqs
+            remainder = num_tokens % num_reqs
+            counts = [per_req] * num_reqs
+            counts[-1] += remainder
+            base["seq_token_counts"] = counts
+        else:
+            base["seq_token_counts"] = []
         return base
 
     # ------------------------------------------------------------------
@@ -115,19 +124,23 @@ class OmniModelState(DefaultModelState):
         Handles ``OmniOutput`` unwrapping and ``make_omni_output``
         conversion, then dispatches to registered plugins.
         """
-        if (
-            not isinstance(model_output, OmniOutput)
-            and isinstance(model_output, (list, tuple))
-            and hasattr(self.model, "make_omni_output")
-        ):
-            buffer_list = self.intermediate_buffer.gather(input_batch)
-            model_output = self.model.make_omni_output(
-                model_output,
-                model_intermediate_buffer=buffer_list,
-                runtime_additional_information=buffer_list,
-            )
+        if not isinstance(model_output, OmniOutput) and hasattr(self.model, "make_omni_output"):
+            if isinstance(model_output, (list, tuple)) or self.have_multimodal_outputs:
+                buffer_list = self.intermediate_buffer.gather(input_batch)
+                try:
+                    model_output = self.model.make_omni_output(
+                        model_output,
+                        model_intermediate_buffer=buffer_list,
+                        runtime_additional_information=buffer_list,
+                    )
+                except Exception:
+                    logger.debug(
+                        "make_omni_output skipped for %s output",
+                        type(model_output).__name__,
+                        exc_info=True,
+                    )
 
-        if self.have_multimodal_outputs and isinstance(model_output, OmniOutput):
+        if isinstance(model_output, OmniOutput):
             text_hidden = model_output.text_hidden_states
             multimodal_outputs: dict = model_output.multimodal_outputs or {}
         elif isinstance(model_output, (list, tuple)):

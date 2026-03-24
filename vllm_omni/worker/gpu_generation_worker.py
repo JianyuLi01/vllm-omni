@@ -18,6 +18,8 @@ from vllm_omni.worker.mixins import OmniWorkerMixin
 
 logger = init_logger(__name__)
 
+VLLM_OMNI_USE_V2_RUNNER = bool(int(os.environ.get("VLLM_OMNI_USE_V2_RUNNER", "0")))
+
 
 class GPUGenerationWorker(OmniWorkerMixin, OmniGPUWorkerBase):
     """GPU Worker for Generation model (non-autoregressive waveform generation).
@@ -93,13 +95,28 @@ class GPUGenerationWorker(OmniWorkerMixin, OmniGPUWorkerBase):
         num_ubatches = 2 if self.vllm_config.parallel_config.enable_dbo else 1
         init_workspace_manager(self.device, num_ubatches)
 
-        if self.use_v2_model_runner:
-            # OMNI: v2 model runner does not yet include omni hooks.
-            logger.warning("OMNI GPUGenerationWorker forces v1 model runner for omni hooks.")
-            self.use_v2_model_runner = False
+        if VLLM_OMNI_USE_V2_RUNNER or self.use_v2_model_runner:
+            from vllm_omni.worker_v2.omni_generation_model_runner import (
+                OmniGenerationModelRunner,
+            )
 
-        self.model_runner = GPUGenerationModelRunner(self.vllm_config, self.device)
+            logger.info("Using MR v2 OmniGenerationModelRunner for generation stage.")
+            self.use_v2_model_runner = True
+            self.model_runner = OmniGenerationModelRunner(self.vllm_config, self.device)
+        else:
+            self.model_runner = GPUGenerationModelRunner(self.vllm_config, self.device)
 
         if self.rank == 0:
             # If usage stat is enabled, collect relevant info.
             report_usage_stats(self.vllm_config)
+
+    @instrument(span_name="Compile/warmup")
+    def compile_or_warm_up_model(self) -> float:
+        """Generation stages have no KV cache or sampler — skip warmup_kernels."""
+        if not self.use_v2_model_runner:
+            return super().compile_or_warm_up_model()
+        import time
+
+        start = time.perf_counter()
+        self.model_runner.profile_run()
+        return time.perf_counter() - start

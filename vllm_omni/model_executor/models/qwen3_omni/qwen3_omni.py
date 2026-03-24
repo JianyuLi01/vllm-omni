@@ -17,7 +17,6 @@ from transformers.models.qwen3_omni_moe.configuration_qwen3_omni_moe import (
 )
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
-from vllm.model_executor.layers.rotary_embedding import MRotaryEmbedding
 from vllm.model_executor.models.interfaces import SupportsMRoPE, SupportsMultiModal, SupportsPP
 from vllm.model_executor.models.qwen3_omni_moe_thinker import (
     Qwen3OmniMoeConditionalGenerationMixin,
@@ -251,7 +250,9 @@ class Qwen3OmniMoeForConditionalGeneration(
                 msg = "Qwen3 Omni thinker get_mrope_input_positions requires mm_features"
                 raise ValueError(msg)
             return self.thinker.get_mrope_input_positions(input_tokens, mm_features)
-        return MRotaryEmbedding.get_input_positions_tensor(input_tokens, **kwargs)
+        num_tokens = len(input_tokens)
+        positions = torch.arange(num_tokens, dtype=torch.long)
+        return positions.unsqueeze(0).expand(3, -1).contiguous(), 0
 
     def forward(
         self,
@@ -326,6 +327,19 @@ class Qwen3OmniMoeForConditionalGeneration(
             if not hasattr(self, "voice_type"):
                 self.voice_type = voice_type
 
+            # When seq_token_counts and model_intermediate_buffer are
+            # provided (v2 runner path), run preprocess + MTP + postprocess
+            # inside forward so the runner stays model-agnostic.
+            seq_token_counts: list[int] | None = kwargs.get("seq_token_counts")
+            buffer_list: list[dict] | None = kwargs.get("model_intermediate_buffer")
+            if seq_token_counts is not None and buffer_list is not None:
+                input_ids, inputs_embeds = self._talker_v2_preprocess_and_mtp(
+                    input_ids,
+                    inputs_embeds,
+                    seq_token_counts,
+                    buffer_list,
+                )
+
             # Run talker forward
             with torch.inference_mode():
                 talker_hidden = self.talker.forward(
@@ -333,6 +347,15 @@ class Qwen3OmniMoeForConditionalGeneration(
                     positions=positions,
                     inputs_embeds=inputs_embeds,
                 )
+
+            # v2 postprocess: store last_talker_hidden per request
+            if seq_token_counts is not None and buffer_list is not None:
+                self._talker_v2_postprocess(
+                    talker_hidden,
+                    seq_token_counts,
+                    buffer_list,
+                )
+
             return talker_hidden
 
         # ========== Stage 3: Code2Wav ==========
@@ -647,6 +670,104 @@ class Qwen3OmniMoeForConditionalGeneration(
         inputs_embeds = summed_embeddings.reshape(-1, self.talker_config.text_config.hidden_size)
         inputs_embeds = (inputs_embeds + text_step).reshape(-1, self.talker_config.text_config.hidden_size)
         return inputs_embeds, code_predictor_codes.squeeze(-1)
+
+    # ------------------------------------------------------------------
+    # v2 runner helpers: self-contained preprocess/MTP/postprocess
+    # ------------------------------------------------------------------
+
+    def _talker_v2_preprocess_and_mtp(
+        self,
+        input_ids: torch.Tensor,
+        inputs_embeds: torch.Tensor,
+        seq_token_counts: list[int],
+        buffer_list: list[dict],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run per-request preprocess and batched MTP inside forward().
+
+        Called by v2 path so the runner stays model-agnostic.  Mutates
+        ``buffer_list`` entries with preprocess updates and
+        ``code_predictor_codes``.
+        """
+        # During dummy/profile runs the buffer entries are empty or contain
+        # only stale keys (e.g. ``last_talker_hidden`` written by a previous
+        # dummy postprocess).  Check for a key that is always present in real
+        # request buffers coming from the thinker stage.
+        _REAL_KEY = "thinker_prefill_embeddings"
+        if not buffer_list or not any(_REAL_KEY in info or "text_step" in info for info in buffer_list):
+            return input_ids, inputs_embeds
+
+        mtp_input_ids_list: list[torch.Tensor] = []
+        mtp_embeds_list: list[torch.Tensor] = []
+        mtp_hidden_list: list[torch.Tensor] = []
+        mtp_step_list: list[torch.Tensor] = []
+        decode_indices: list[int] = []
+
+        offset = 0
+        for i, ntok in enumerate(seq_token_counts):
+            if i >= len(buffer_list):
+                offset += ntok
+                continue
+            info_dict = buffer_list[i]
+            req_ids = input_ids[offset : offset + ntok]
+            req_emb = inputs_embeds[offset : offset + ntok]
+
+            if self.has_preprocess:
+                req_ids, req_emb, update_dict = self.talker_preprocess(req_ids, req_emb, **info_dict)
+                mtp_inputs = update_dict.pop("mtp_inputs", None)
+                if mtp_inputs is not None and ntok == 1:
+                    last_hidden, t_step = mtp_inputs
+                    mtp_input_ids_list.append(req_ids)
+                    mtp_embeds_list.append(req_emb)
+                    mtp_hidden_list.append(last_hidden)
+                    mtp_step_list.append(t_step)
+                    decode_indices.append(i)
+                for k, v in update_dict.items():
+                    info_dict[k] = v
+
+            seg_len = min(ntok, req_emb.shape[0])
+            inputs_embeds[offset : offset + seg_len] = req_emb[:seg_len]
+            if isinstance(req_ids, torch.Tensor) and req_ids.numel() == seg_len:
+                input_ids[offset : offset + seg_len] = req_ids
+            offset += ntok
+
+        if decode_indices and mtp_input_ids_list:
+            batch_ids = torch.cat(mtp_input_ids_list, dim=0)
+            batch_emb = torch.cat(mtp_embeds_list, dim=0)
+            batch_hidden = torch.cat(mtp_hidden_list, dim=0)
+            batch_step = torch.cat(mtp_step_list, dim=0)
+            new_emb, codes = self.talker_mtp(
+                batch_ids,
+                batch_emb,
+                batch_hidden,
+                batch_step,
+            )
+            out_key = getattr(self, "talker_mtp_output_key", "code_predictor_codes")
+            off = 0
+            for j, ntok in enumerate(seq_token_counts):
+                if j in decode_indices:
+                    slot = decode_indices.index(j)
+                    inputs_embeds[off : off + 1] = new_emb[slot : slot + 1]
+                    buffer_list[j][out_key] = codes[slot : slot + 1]
+                off += ntok
+
+        return input_ids, inputs_embeds
+
+    def _talker_v2_postprocess(
+        self,
+        talker_hidden: torch.Tensor,
+        seq_token_counts: list[int],
+        buffer_list: list[dict],
+    ) -> None:
+        """Store ``last_talker_hidden`` per request after the main forward."""
+        _REAL_KEY = "thinker_prefill_embeddings"
+        if not buffer_list or not any(_REAL_KEY in info or "text_step" in info for info in buffer_list):
+            return
+        offset = 0
+        for i, ntok in enumerate(seq_token_counts):
+            if i < len(buffer_list):
+                end = offset + ntok
+                buffer_list[i]["last_talker_hidden"] = talker_hidden[end - 1 : end].detach()
+            offset += ntok
 
     def _get_tts_embed(self, thinker_embed, tts_bos_thinker, tts_eos_thinker, tts_pad_thinker):
         """Project thinker-side TTS embeddings into talker text space."""

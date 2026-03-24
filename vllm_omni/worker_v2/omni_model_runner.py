@@ -41,13 +41,17 @@ class OmniGPUModelRunner(GPUModelRunner):
         if hasattr(self.model, "make_omni_output"):
             self._wrap_model_forward()
 
+    # ------------------------------------------------------------------
+    # Forward wrapper (output interception)
+    # ------------------------------------------------------------------
+
     def _wrap_model_forward(self) -> None:
         """Wrap ``model.forward`` to intercept tuple returns.
 
-        Stores the second element on ``self._last_aux_output`` and
-        returns only the first (a tensor), making the model compatible
-        with the v2 runner's tensor-only expectation and CUDA graph
-        capture.
+        Stores the second element of a ``(tensor, aux)`` return on
+        ``self._last_aux_output`` and returns only the tensor, making
+        the model compatible with the v2 runner's tensor-only
+        expectation and CUDA graph capture.
         """
         original_forward = self.model.forward
         runner = self

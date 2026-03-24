@@ -33,6 +33,9 @@ from vllm.v1.engine import EngineCoreRequest
 from vllm.v1.engine.input_processor import InputProcessor
 from vllm.v1.engine.utils import get_engine_zmq_addresses, launch_core_engines
 
+if os.environ.get("VLLM_OMNI_USE_V2_RUNNER", "0") not in ("0", ""):
+    os.environ.setdefault("VLLM_USE_V2_MODEL_RUNNER", "1")
+
 from vllm_omni.diffusion.data import DiffusionParallelConfig
 from vllm_omni.distributed.omni_connectors.utils.initialization import (
     resolve_omni_kv_config_for_stage,
