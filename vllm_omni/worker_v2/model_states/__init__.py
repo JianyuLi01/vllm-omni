@@ -15,6 +15,8 @@ from vllm.v1.worker.gpu.model_states import (
 )
 from vllm.v1.worker.gpu.model_states.interface import ModelState
 
+# Keep in sync: when adding a new Omni model architecture, add it here
+# AND update the corresponding test in tests/worker_v2/test_init_model_state.py.
 _OMNI_ARCHITECTURES: set[str] = {
     "Qwen3OmniMoeForConditionalGeneration",
     "MammothModa2ForConditionalGeneration",
