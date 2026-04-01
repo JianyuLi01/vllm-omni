@@ -42,7 +42,7 @@ Committers have write access and merge rights. They typically have deep expertis
 - [@SamitHuang](https://github.com/SamitHuang): RL and Diffusion
 - [@tzhouam](https://github.com/tzhouam): Engine and New Model Support
 - [@wtomin](https://github.com/wtomin): Diffusion and Parallelism
-- [@ZeldaHuang](https://github.com/ZeldaHuang):
+- [@ZeldaHuang](https://github.com/ZeldaHuang): Omni Support
 - [@ZJY0516](https://github.com/ZJY0516): Diffusion and CustomOp
 
 ## Meetings
