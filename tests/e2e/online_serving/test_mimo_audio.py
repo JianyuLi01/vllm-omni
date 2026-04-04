@@ -79,8 +79,11 @@ try:
         for model in models
         for stage_config in stage_configs
     ]
-except Exception:
-    test_params = []
+except Exception as exc:
+    pytest.skip(
+        f"MiMo-Audio online serving tests skipped: module setup failed ({type(exc).__name__}: {exc})",
+        allow_module_level=True,
+    )
 
 
 def get_prompt(prompt_type="text_only"):

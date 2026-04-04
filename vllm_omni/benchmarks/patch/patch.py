@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextlib
 import io
 import json
@@ -13,7 +14,6 @@ from datetime import datetime
 from typing import Literal
 
 import aiohttp
-import pybase64 as base64
 from pydub import AudioSegment
 from tqdm.asyncio import tqdm
 from vllm.benchmarks import datasets
