@@ -204,7 +204,7 @@ def _try_resolve_omni_model_type(model: str) -> str | None:
     return best_match
 
 
-def resolve_model_config_path(model: str) -> str:
+def resolve_model_config_path(model: str) -> str | None:
     """Resolve the stage config file path from the model name.
 
     Resolves stage configuration path based on the model type and device type.
@@ -215,11 +215,13 @@ def resolve_model_config_path(model: str) -> str:
         model: Model name or path (used to determine model_type)
 
     Returns:
-        String path to the stage configuration file
+        Absolute path to the stage configuration YAML, or None if the model type
+        cannot be determined from available config files (callers may supply a
+        default stage config instead).
 
     Raises:
-        ValueError: If model_type cannot be determined
-        FileNotFoundError: If no stage config file exists for the model type
+        ValueError: If partial repo metadata exists but model_type still cannot
+            be determined (e.g. diffusers layout without ``_class_name``).
     """
     # Try to get config from standard transformers format first
     try:
@@ -250,11 +252,9 @@ def resolve_model_config_path(model: str) -> str:
             except Exception as e:
                 raise ValueError(f"Failed to read config.json for model: {model}. Error: {e}") from e
         else:
-            raise ValueError(
-                f"Could not determine model_type for model: {model}. "
-                f"Model is not in standard transformers format and does not have model_index.json. "
-                f"Please ensure the model has proper configuration files with 'model_type' field"
-            )
+            # No usable HF metadata locally / offline: allow load_and_resolve_stage_configs
+            # and similar callers to fall back to default_stage_cfg_factory.
+            return None
 
     default_config_path = current_omni_platform.get_default_stage_config_path()
     if model_type in _DIFFUSERS_CLASS_TO_CONFIG:
