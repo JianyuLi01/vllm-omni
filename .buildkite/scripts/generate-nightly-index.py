@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-import re
-
 
 def normalize_package_name(name: str) -> str:
     """Normalize package name per PEP 503."""
