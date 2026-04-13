@@ -75,7 +75,7 @@ Fetch:
 - Linked issues for `[Bugfix]` and `[Feature]` PRs only when conventions are unclear
 - Related PRs only when conventions or prior decisions are unclear
 
-Group changes mentally by **kind** (runtime code, tests, docs, configs) to see where risk sits; then load references (Step 4) only for areas touched.
+Group changes mentally by **kind** (runtime code, tests, docs, configs) to see where risk sits, then fetch only the minimum extra context needed for the areas touched.
 
 Do not fetch broad extra context unless the diff leaves real ambiguity.
 
@@ -120,7 +120,7 @@ BLOCKER scan:
 
 For detailed anti-patterns with code examples, see [references/blocker-patterns.md](references/blocker-patterns.md).
 
-**If blockers found:** Track issues internally (category + file + line). Do not paste structured `BLOCKING ISSUES:` templates into the review body (see Step 6).
+**If blockers found:** Track issues internally (category + file + line). Do not paste structured `BLOCKING ISSUES:` templates into the review body (see Step 7).
 
 **If no blockers:** List non-blocking suggestions and proceed to Step 3.
 
@@ -130,20 +130,7 @@ Use the title prefix and changed directories to decide whether a domain skill is
 
 **Full prefix table, multi-skill combos, hardware detection, and delegation triggers:** [references/review-routing.md](references/review-routing.md).
 
-### Step 4: Load Only the Relevant Review Reference
-
-Use **only** the files in this table. Older docs may mention `references/pitfalls.md` or `references/code-patterns.md`; those files were removed — use **Part 2** of blocker patterns and **Code patterns for review** in architecture instead.
-
-| Diff Area                                                                                 | Load                                                       |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `vllm_omni/engine/`, `vllm_omni/stages/`, `vllm_omni/connectors/`, `vllm_omni/diffusion/` | [blocker-patterns.md](references/blocker-patterns.md) **Part 2** (common pitfalls) |
-| Async, distributed coordination, validation, connector behavior                           | [architecture.md](references/architecture.md) — section **Code patterns for review** (at end of file) |
-| Scheduler, stage boundaries, execution model, critical paths                              | [Architecture](references/architecture.md) (full)          |
-| High-risk changes (core logic, configs/params, error handling, concurrency/distributed, I/O) or `[Feature]` / `[Bugfix]` PRs | [references/tests-docs-checklist.md](references/tests-docs-checklist.md) |
-
-Pick the narrowest references that match the diff; avoid loading every row by default.
-
-### Step 5: Ask for Concrete Validation Evidence
+### Step 4: Ask for Concrete Validation Evidence
 
 When tests or benchmarks are missing **and PR description evidence is insufficient**, ask for specific evidence:
 
@@ -160,9 +147,9 @@ For `[Feature]` PRs affecting performance or `[Performance]` PRs, use the checkl
 
 Be explicit in review comments. Treat "manual verification only" as insufficient unless automation is genuinely impossible.
 
-### Step 6: Verify Perf/Accuracy Claims (Blocking)
+### Step 5: Verify Perf/Accuracy Claims (Blocking)
 
-**When to activate:** PR has `[Performance]` prefix, or PR body contains quantitative perf/accuracy claims (latency, throughput, VRAM, speedup, accuracy metrics), or Step 5 flagged missing benchmarks.
+**When to activate:** PR has `[Performance]` prefix, or PR body contains quantitative perf/accuracy claims (latency, throughput, VRAM, speedup, accuracy metrics), or Step 4 flagged missing benchmarks.
 
 **Load** [references/perf-verification.md](references/perf-verification.md).
 
@@ -185,9 +172,9 @@ Be explicit in review comments. Treat "manual verification only" as insufficient
 | Static-only | No GPU or model too large | Analyze benchmark scripts in diff for correctness, flag implausible claims |
 | Skip | No relevant perf claims | Do not activate |
 
-**Delivery:** Local report first, ask user before posting as PR comment. If verification reveals a confirmed NOT_CONFIRMED for accuracy or VRAM regression, escalate to REQUEST_CHANGES via Step 8.
+**Delivery:** Local report first, ask user before posting as PR comment. If verification reveals a confirmed NOT_CONFIRMED for accuracy or VRAM regression, escalate to REQUEST_CHANGES via Step 7.
 
-### Step 7: Evaluate Test Quality (Blocking)
+### Step 6: Evaluate Test Quality (Blocking)
 
 **When to activate:** PR adds or modifies test files, or PR touches core code (`engine/`, `stages/`, `connectors/`) without adding tests, or PR is test-only.
 
@@ -196,7 +183,7 @@ Be explicit in review comments. Treat "manual verification only" as insufficient
 **Workflow:**
 
 1. Static analysis (always runs) — check assertion quality, anti-patterns, marker compliance, edge case coverage
-2. Detect hardware — same detection as Step 6 (cross-referenced from `perf-verification.md`)
+2. Detect hardware — same detection as Step 5 (cross-referenced from `perf-verification.md`)
 3. Find affected tests — map changed source files to test files via grep (not path convention)
 4. Filter by hardware — skip tests requiring unavailable resources
 5. Run tests — `pytest` with `--run-level core_model` by default; use `advanced_model` only if hardware is sufficient
@@ -210,9 +197,9 @@ Be explicit in review comments. Treat "manual verification only" as insufficient
 | Full analysis | Hardware matches test markers | Static + runtime execution |
 | Static-only | Hardware doesn't match or no GPU | Static analysis only; report which tests were skipped |
 
-**Delivery:** Local assessment first, ask user before posting. Convert worst 1-2 findings to inline comments (counts against comment budget). If D-grade dimension or code bug found, escalate to REQUEST_CHANGES via Step 8.
+**Delivery:** Local assessment first, ask user before posting. Convert worst 1-2 findings to inline comments (counts against comment budget). If D-grade dimension or code bug found, escalate to REQUEST_CHANGES via Step 7.
 
-### Step 8: Final Verdict
+### Step 7: Final Verdict
 
 Post inline comments directly to GitHub as you find them. Do **not** submit a review event (APPROVE / COMMENT / REQUEST_CHANGES) — leave the verdict decision to the user.
 
