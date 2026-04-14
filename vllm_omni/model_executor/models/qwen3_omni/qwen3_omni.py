@@ -17,9 +17,7 @@ from transformers.models.qwen3_omni_moe.configuration_qwen3_omni_moe import (
 )
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
-from vllm.model_executor.layers.rotary_embedding import MRotaryEmbedding
-from vllm.model_executor.models.interfaces import SupportsMRoPE, SupportsMultiModal, SupportsPP, SupportsRealtime
-from vllm.model_executor.models.qwen3_asr_realtime import Qwen3ASRRealtimeBuffer
+from vllm.model_executor.models.interfaces import SupportsMRoPE, SupportsMultiModal, SupportsPP
 from vllm.model_executor.models.qwen3_omni_moe_thinker import (
     Qwen3OmniMoeConditionalGenerationMixin,
 )
@@ -344,7 +342,11 @@ class Qwen3OmniMoeForConditionalGeneration(
             # inside forward so the runner stays model-agnostic.
             seq_token_counts: list[int] | None = kwargs.get("seq_token_counts")
             buffer_list: list[dict] | None = kwargs.get("model_intermediate_buffer")
-            if seq_token_counts is not None and buffer_list is not None and hasattr(self, '_talker_v2_preprocess_and_mtp'):
+            if (
+                seq_token_counts is not None
+                and buffer_list is not None
+                and hasattr(self, "_talker_v2_preprocess_and_mtp")
+            ):
                 input_ids, inputs_embeds = self._talker_v2_preprocess_and_mtp(
                     input_ids,
                     inputs_embeds,
@@ -585,13 +587,14 @@ class Qwen3OmniMoeForConditionalGeneration(
 
         # Speaker token IDs (for voice selection)
         # In Qwen3, speaker_id mapping is in talker_config.speaker_id
+        # Keys are lowercased for case-insensitive matching with serving layer.
         if hasattr(talker_hf_config, "speaker_id") and talker_hf_config.speaker_id:
-            self.tts_text_spk_token_ids = talker_hf_config.speaker_id
+            self.tts_text_spk_token_ids = {k.lower(): v for k, v in talker_hf_config.speaker_id.items()}
         else:
             # Default to audio_start_token_id if no speaker mapping
             self.tts_text_spk_token_ids = {
                 "default": talker_hf_config.audio_start_token_id,
-                "Ethan": talker_hf_config.audio_start_token_id,
+                "ethan": talker_hf_config.audio_start_token_id,
                 "prefix_caching": talker_hf_config.audio_start_token_id,
             }
 

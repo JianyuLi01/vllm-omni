@@ -45,13 +45,9 @@ def _assert_wav_output(output_dir: str) -> None:
     assert len(wav_files) > 0, f"No .wav files found in {output_dir}"
     for wav in wav_files:
         data, sr = sf.read(wav, dtype="float32")
-        assert sr == EXPECTED_SAMPLE_RATE, (
-            f"{wav.name}: sample_rate={sr}, expected {EXPECTED_SAMPLE_RATE}"
-        )
+        assert sr == EXPECTED_SAMPLE_RATE, f"{wav.name}: sample_rate={sr}, expected {EXPECTED_SAMPLE_RATE}"
         duration = len(data) / sr
-        assert duration >= MIN_DURATION_S, (
-            f"{wav.name}: duration={duration:.3f}s, expected >= {MIN_DURATION_S}s"
-        )
+        assert duration >= MIN_DURATION_S, f"{wav.name}: duration={duration:.3f}s, expected >= {MIN_DURATION_S}s"
         assert np.max(np.abs(data)) > 0.01, f"{wav.name}: audio appears to be silence"
 
 
@@ -61,10 +57,14 @@ def test_custom_voice():
     """CustomVoice single prompt — the most common TTS use case."""
     with tempfile.TemporaryDirectory() as output_dir:
         command = [
-            "python", END2END,
-            "--model", CUSTOM_VOICE_MODEL,
-            "--query-type", "CustomVoice",
-            "--output-dir", output_dir,
+            "python",
+            END2END,
+            "--model",
+            CUSTOM_VOICE_MODEL,
+            "--query-type",
+            "CustomVoice",
+            "--output-dir",
+            output_dir,
         ]
         run_cmd(command)
         _assert_wav_output(output_dir)
@@ -76,10 +76,14 @@ def test_voice_design():
     """VoiceDesign single prompt — generates speech from a voice description."""
     with tempfile.TemporaryDirectory() as output_dir:
         command = [
-            "python", END2END,
-            "--model", VOICE_DESIGN_MODEL,
-            "--query-type", "VoiceDesign",
-            "--output-dir", output_dir,
+            "python",
+            END2END,
+            "--model",
+            VOICE_DESIGN_MODEL,
+            "--query-type",
+            "VoiceDesign",
+            "--output-dir",
+            output_dir,
         ]
         run_cmd(command)
         _assert_wav_output(output_dir)
@@ -91,11 +95,16 @@ def test_base_icl():
     """Base ICL mode — voice cloning with reference audio and transcript."""
     with tempfile.TemporaryDirectory() as output_dir:
         command = [
-            "python", END2END,
-            "--model", BASE_MODEL,
-            "--query-type", "Base",
-            "--mode-tag", "icl",
-            "--output-dir", output_dir,
+            "python",
+            END2END,
+            "--model",
+            BASE_MODEL,
+            "--query-type",
+            "Base",
+            "--mode-tag",
+            "icl",
+            "--output-dir",
+            output_dir,
         ]
         run_cmd(command)
         _assert_wav_output(output_dir)
@@ -107,11 +116,15 @@ def test_custom_voice_streaming():
     """CustomVoice streaming — exercises the AsyncOmni streaming path."""
     with tempfile.TemporaryDirectory() as output_dir:
         command = [
-            "python", END2END,
-            "--model", CUSTOM_VOICE_MODEL,
-            "--query-type", "CustomVoice",
+            "python",
+            END2END,
+            "--model",
+            CUSTOM_VOICE_MODEL,
+            "--query-type",
+            "CustomVoice",
             "--streaming",
-            "--output-dir", output_dir,
+            "--output-dir",
+            output_dir,
         ]
         run_cmd(command)
         _assert_wav_output(output_dir)
