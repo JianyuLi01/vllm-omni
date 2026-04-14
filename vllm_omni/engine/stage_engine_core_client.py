@@ -82,10 +82,10 @@ class StageEngineCoreClientBase:
         proc: Any = None,
         client_count: int = 1,
         client_index: int = 0,
-        engine_manager: Any = None,
-        coordinator: Any = None,
         *,
         metadata: StageMetadata | None = None,
+        engine_manager: Any = None,
+        coordinator: Any = None,
     ):
         """Create an async EngineCore client for a single stage.
 

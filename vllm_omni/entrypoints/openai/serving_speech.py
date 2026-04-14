@@ -639,9 +639,6 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             "original_filename": audio_file.filename,
             "file_size": file_size,
             "ref_text": ref_text,
-            "cache_status": "pending",
-            "cache_file": None,
-            "cache_generated_at": None,
             "embedding_source": "audio",
         }
 
@@ -735,9 +732,6 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             "mime_type": "application/x-safetensors",
             "original_filename": filename,
             "file_size": file_path.stat().st_size,
-            "cache_status": "ready",
-            "cache_file": str(file_path),
-            "cache_generated_at": timestamp,
             "embedding_source": "direct",
             "embedding_dim": emb_dim,
         }
