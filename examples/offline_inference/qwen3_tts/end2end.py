@@ -326,7 +326,9 @@ def _build_inputs(args) -> tuple[str, list]:
     if args.query_type in {"CustomVoice", "VoiceDesign"}:
         query_result = query_func(use_batch_sample=args.use_batch_sample, model_name=model_override)
     elif args.query_type == "Base":
-        query_result = query_func(use_batch_sample=args.use_batch_sample, mode_tag=args.mode_tag, model_name=model_override)
+        query_result = query_func(
+            use_batch_sample=args.use_batch_sample, mode_tag=args.mode_tag, model_name=model_override
+        )
     else:
         query_result = query_func()
 
