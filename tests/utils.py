@@ -18,7 +18,6 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 from vllm.platforms import current_platform
-from vllm.utils.torch_utils import cuda_device_count_stateless
 
 from vllm_omni.platforms import current_omni_platform
 
@@ -368,7 +367,7 @@ def cuda_marks(*, res: str, num_cards: int):
     else:
         test_distributed = pytest.mark.distributed_cuda(num_cards=num_cards)
         test_skipif = pytest.mark.skipif_cuda(
-            cuda_device_count_stateless() < num_cards,
+            current_platform.device_count() < num_cards,
             reason=f"Need at least {num_cards} CUDA GPUs to run the test.",
         )
         return marks + [test_distributed, test_skipif]

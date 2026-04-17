@@ -177,9 +177,9 @@ class StageEngineCoreClient(AsyncMPClient):
             kwargs=kwargs,
         )
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float | None = None) -> None:
         """Shutdown ZMQ connections and the subprocess."""
-        super().shutdown()
+        super().shutdown(timeout=timeout)
         if self._proc is not None and self._proc.is_alive():
             self._proc.terminate()
             self._proc.join(timeout=5)
