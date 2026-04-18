@@ -29,7 +29,7 @@ platform section, document one or more tested hardware configurations.
 
 ### 1x A100 80GB
 
-### Environment
+#### Environment
 
 - OS:
 - Python:
@@ -37,19 +37,19 @@ platform section, document one or more tested hardware configurations.
 - vLLM version:
 - vLLM-Omni version or commit:
 
-### Command
+#### Command
 
 ```bash
 # Add the exact command(s) here
 ```
 
-### Verification
+#### Verification
 
 ```bash
 # Add a quick validation command or expected output here
 ```
 
-### Notes
+#### Notes
 
 - Memory usage:
 - Key flags:
@@ -61,8 +61,22 @@ Repeat the same structure for other hardware setups as needed.
 
 ## ROCm
 
-Repeat the same structure for ROCm setups as needed.
+### Example hardware configuration
+
+Repeat the same nested structure for ROCm setups as needed:
+
+- `#### Environment`
+- `#### Command`
+- `#### Verification`
+- `#### Notes`
 
 ## NPU
 
-Repeat the same structure for NPU setups as needed.
+### Example hardware configuration
+
+Repeat the same nested structure for NPU setups as needed:
+
+- `#### Environment`
+- `#### Command`
+- `#### Verification`
+- `#### Notes`
