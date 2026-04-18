@@ -22,7 +22,7 @@ import soundfile as sf
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoConfig, AutoFeatureExtractor, AutoModel
-from vllm.multimodal.audio import resample_audio_resampy
+from vllm.multimodal.audio import resample_audio_pyav as resample_audio_resampy
 from vllm.multimodal.media.audio import load_audio as _load_audio_file
 
 from .tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import Qwen3TTSTokenizerV2Config

@@ -13,6 +13,7 @@ import dataclasses
 import json
 import os
 import queue
+import sys
 import threading
 import time
 import uuid
@@ -498,7 +499,8 @@ class AsyncOmniEngine:
                 stage_id=metadata.stage_id,
             )
             logger.info("[AsyncOmniEngine] Stage %s remote engine handshake started", metadata.stage_id)
-            with launch_cm as (engine_manager, coordinator, addresses):
+            (engine_manager, coordinator, addresses, _tensor_queue) = launch_cm.__enter__()
+            try:
                 started_stage = StartedLlmStage(
                     stage_id=metadata.stage_id,
                     metadata=metadata,
@@ -508,6 +510,11 @@ class AsyncOmniEngine:
                     coordinator=coordinator,
                     addresses=addresses,
                 )
+            except BaseException:
+                if not launch_cm.__exit__(*sys.exc_info()):
+                    raise
+            else:
+                launch_cm.__exit__(None, None, None)
             logger.info("[AsyncOmniEngine] Stage %s remote engine startup completed", metadata.stage_id)
             assert started_stage is not None
             return started_stage

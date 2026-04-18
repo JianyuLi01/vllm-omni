@@ -462,7 +462,7 @@ def connect_remote_engine_cores(
     vllm_config: VllmConfig,
     omni_master_server: OmniMasterServer,
     stage_id: int,
-) -> Iterator[tuple[None, DPCoordinator | None, EngineZmqAddresses]]:
+) -> Iterator[tuple[None, DPCoordinator | None, EngineZmqAddresses, None]]:
     """Wait for remote engine cores to connect through the omni handshake."""
     addresses = omni_master_server.get_zmq_addresses(stage_id)
     parallel_config = vllm_config.parallel_config
@@ -491,7 +491,7 @@ def connect_remote_engine_cores(
     handshake_bind_address = omni_master_server.get_allocation(stage_id).handshake_bind_address
 
     with zmq_socket_ctx(handshake_bind_address, zmq.ROUTER, bind=True) as handshake_socket:
-        yield None, coordinator, addresses
+        yield None, coordinator, addresses, None
 
         _wait_for_omni_engine_startup(
             handshake_socket,

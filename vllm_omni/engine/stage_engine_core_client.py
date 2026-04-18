@@ -55,6 +55,7 @@ class StageEngineCoreClientBase:
         coordinator: Any = None,
         client_count: int = 1,
         client_index: int = 0,
+        log_stats: bool = False,
     ) -> StageEngineCoreClient | DPLBStageEngineCoreClient:
         """Create the appropriate stage async client for the DP mode."""
         parallel_config = vllm_config.parallel_config
@@ -68,6 +69,7 @@ class StageEngineCoreClientBase:
             coordinator=coordinator,
             client_count=client_count,
             client_index=client_index,
+            log_stats=log_stats,
         )
 
         if parallel_config.data_parallel_size > 1 and not parallel_config.data_parallel_external_lb:
@@ -353,9 +355,9 @@ class StageEngineCoreClientBase:
             kwargs=kwargs,
         )
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float | None = None) -> None:
         """Shutdown managed resources and any externally spawned subprocess."""
-        super().shutdown()
+        super().shutdown(timeout=timeout)
         if self._proc is not None and self._proc.is_alive():
             self._proc.terminate()
             self._proc.join(timeout=5)
