@@ -219,9 +219,13 @@ def resolve_model_config_path(model: str) -> str | None:
         cannot be determined from available config files (callers may supply a
         default stage config instead).
 
-    Raises:
-        ValueError: If partial repo metadata exists but model_type still cannot
-            be determined (e.g. diffusers layout without ``_class_name``).
+    Notes:
+        Returns None (rather than raising) when a diffusers model_index.json is
+        available but ``_class_name`` cannot be extracted (e.g. the Hub fetch
+        fails, the repo is gated without HF_TOKEN, or the pipeline class is not
+        yet mapped to a stage YAML). Callers like
+        ``load_and_resolve_stage_configs`` then fall back to
+        ``default_stage_cfg_factory`` (e.g. default diffusion stage config).
     """
     # Try to get config from standard transformers format first
     try:
@@ -232,10 +236,18 @@ def resolve_model_config_path(model: str) -> str | None:
         if file_or_path_exists(model, "model_index.json", revision=None):
             model_type = _try_get_class_name_from_diffusers_config(model)
             if model_type is None:
-                raise ValueError(
-                    f"Could not determine model_type for diffusers model: {model}. "
-                    f"Please ensure the model has 'model_type' in transformer/config.json or model_index.json"
+                # model_index.json is present but ``_class_name`` cannot be
+                # resolved (e.g. Hub fetch failed / gated repo without token).
+                # Fall back to default stage config factory instead of failing
+                # hard, so diffusion pipelines without a dedicated YAML (e.g.
+                # StableAudioPipeline) still load via the default diffusion
+                # stage cfg builder.
+                logger.warning(
+                    "Could not determine _class_name from model_index.json for diffusers model '%s'. "
+                    "Falling back to default stage config factory.",
+                    model,
                 )
+                return None
         elif file_or_path_exists(model, "config.json", revision=None):
             # Try to read config.json manually for custom models like Bagel that fail get_config
             # but have a valid config.json with model_type

@@ -69,6 +69,36 @@ class Qwen3TTSCode2Wav(nn.Module):
                 "Please make sure the checkpoint contains the required HF preprocessing files."
             )
 
+        # Eagerly materialize the speech tokenizer weights into the snapshot
+        # directory. vLLM's top-level weight fetch only pulls the main model
+        # shards, so the `speech_tokenizer/` subfolder may only contain the
+        # small config files (downloaded above). AutoModel.from_pretrained(local_dir)
+        # will NOT fall back to Hub downloads for a local path, so without this
+        # we'd raise `no file named pytorch_model.bin, model.safetensors, ...`.
+        weight_downloaded = False
+        for candidate in ("model.safetensors", "pytorch_model.bin"):
+            try:
+                wpath = cached_file(
+                    self.model_path,
+                    f"speech_tokenizer/{candidate}",
+                    _raise_exceptions_for_missing_entries=False,
+                )
+            except Exception:
+                wpath = None
+            if wpath:
+                weight_downloaded = True
+                break
+        if not weight_downloaded:
+            # Fall back to sharded safetensors index if single-file is absent.
+            try:
+                cached_file(
+                    self.model_path,
+                    "speech_tokenizer/model.safetensors.index.json",
+                    _raise_exceptions_for_missing_entries=False,
+                )
+            except Exception:
+                pass
+
         tok = Qwen3TTSTokenizer.from_pretrained(
             speech_tokenizer_dir,
             torch_dtype=torch.float32,
@@ -160,6 +190,13 @@ class Qwen3TTSCode2Wav(nn.Module):
             return torch.empty((0, 1), device=input_ids.device, dtype=torch.float32)
         return torch.zeros((input_ids.shape[0], 1), device=input_ids.device, dtype=torch.float32)
 
+    def get_dummy_runtime_additional_information(self, num_reqs: int) -> list[dict[str, Any]]:
+        # Marker used by ``forward`` to short-circuit profiling / warmup dummy runs
+        # (e.g. ``flashinfer_autotune``) before they try to materialize the speech
+        # tokenizer decoder, which is a large subfolder weight that isn't required
+        # to estimate KV-cache capacity or warm up attention kernels.
+        return [{"_dummy_profile": True} for _ in range(max(1, int(num_reqs)))]
+
     def compute_logits(self, hidden_states: torch.Tensor | OmniOutput, sampling_metadata: Any = None) -> None:
         return None
 
@@ -205,6 +242,20 @@ class Qwen3TTSCode2Wav(nn.Module):
         Length management is done here instead of relying on HF's padding=-1
         sentinel logic.
         """
+        # Short-circuit vLLM dummy/profile runs (e.g. flashinfer_autotune,
+        # compile/warmup) so we don't have to load the speech tokenizer
+        # decoder weights just to run a no-op forward. The tokenizer subfolder
+        # weights are materialized lazily on the first real decode request.
+        if runtime_additional_information is not None and any(
+            isinstance(info, dict) and info.get("_dummy_profile") for info in runtime_additional_information
+        ):
+            sr_tensor = torch.tensor(int(self._output_sample_rate or 0), dtype=torch.int32)
+            empty = torch.zeros((0,), dtype=torch.float32)
+            return OmniOutput(
+                text_hidden_states=None,
+                multimodal_outputs={"model_outputs": [empty], "sr": [sr_tensor]},
+            )
+
         self._ensure_speech_tokenizer_loaded()
         assert self._decoder is not None
         assert self._num_quantizers is not None

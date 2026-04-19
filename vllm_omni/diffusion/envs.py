@@ -89,10 +89,18 @@ class PackagesEnvChecker:
                 pass
 
             # Try FA2 from flash-attn package
-            from flash_attn import __version__
+            try:
+                from flash_attn import __version__
 
-            if __version__ < "2.6.0":
-                raise ImportError("install flash_attn >= 2.6.0")
+                if __version__ < "2.6.0":
+                    raise ImportError("install flash_attn >= 2.6.0")
+                return True
+            except (ImportError, ModuleNotFoundError):
+                pass
+
+            # Fallback: FA bundled with vLLM (exposes flash_attn_varlen_func)
+            import vllm.vllm_flash_attn  # noqa: F401
+
             return True
         except (ImportError, ModuleNotFoundError):
             if not packages_info.get("has_aiter", False):

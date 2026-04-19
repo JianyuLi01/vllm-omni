@@ -1124,6 +1124,21 @@ class Qwen3TTSTalkerForConditionalGeneration(nn.Module):
         preprocessor_config_path = cached_file(self.model_path, "speech_tokenizer/preprocessor_config.json")
         if preprocessor_config_path is None:
             raise ValueError(f"{self.model_path}/speech_tokenizer/preprocessor_config.json not found")
+        # Eagerly fetch the speech tokenizer weights into the snapshot dir.
+        # vLLM's main weight loader only pulls top-level model shards, so the
+        # subfolder would otherwise be missing model.safetensors / pytorch_model.bin
+        # and AutoModel.from_pretrained(local_dir) would fail without falling back
+        # to the Hub.
+        for _candidate in ("model.safetensors", "pytorch_model.bin"):
+            try:
+                if cached_file(
+                    self.model_path,
+                    f"speech_tokenizer/{_candidate}",
+                    _raise_exceptions_for_missing_entries=False,
+                ):
+                    break
+            except Exception:
+                continue
         speech_tokenizer_dir = os.path.dirname(speech_tokenizer_path)
         tok = Qwen3TTSTokenizer.from_pretrained(
             speech_tokenizer_dir,

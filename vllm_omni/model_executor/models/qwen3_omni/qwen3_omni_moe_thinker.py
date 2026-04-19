@@ -1299,10 +1299,12 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
 
         # Detect interleaved audio-in-video early, since it affects
         # both the deepstack path and the final embedding merge.
+        # is_multimodal from the worker may be CPU; bitwise ops need input_ids' device.
+        is_mm_device = is_multimodal.to(device=input_ids.device, non_blocking=True)
         video_token_id = self.config.video_token_id
         audio_token_id = self.config.audio_token_id
-        is_video = is_multimodal & (input_ids == video_token_id)
-        is_audio = is_multimodal & (input_ids == audio_token_id)
+        is_video = is_mm_device & (input_ids == video_token_id)
+        is_audio = is_mm_device & (input_ids == audio_token_id)
         num_video = is_video.sum().item()
         num_audio = is_audio.sum().item()
 
@@ -1370,7 +1372,7 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
                 multimodal_embeddings,
                 is_video,
                 is_audio,
-                is_multimodal,
+                is_mm_device,
                 num_video,
                 num_audio,
             )
