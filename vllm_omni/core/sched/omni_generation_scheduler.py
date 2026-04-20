@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import time
 from collections import defaultdict
@@ -12,11 +14,16 @@ from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.core.sched.request_queue import create_request_queue
 from vllm.v1.core.sched.scheduler import Scheduler as VLLMScheduler
 from vllm.v1.core.sched.utils import remove_all
-from vllm.v1.engine import EngineCoreEventType, EngineCoreOutput, EngineCoreOutputs
+from vllm.v1.engine import (
+    EngineCoreEventType,
+    EngineCoreOutput,
+    EngineCoreOutputs,
+)
 from vllm.v1.metrics.perf import PerfStats
-from vllm.v1.request import Request, RequestStatus
+from vllm.v1.request import Request, RequestStatus, StreamingUpdate
 from vllm.v1.spec_decode.metrics import SpecDecodingStats
 
+from vllm_omni.core.sched.omni_scheduler_mixin import OmniSchedulerMixin
 from vllm_omni.core.sched.output import OmniCachedRequestData, OmniNewRequestData
 from vllm_omni.distributed.omni_connectors.transfer_adapter.chunk_transfer_adapter import (
     OmniChunkTransferAdapter,
@@ -28,7 +35,7 @@ logger = init_logger(__name__)
 VLLM_OMNI_USE_V2_RUNNER = bool(int(os.environ.get("VLLM_OMNI_USE_V2_RUNNER", "0")))
 
 
-class OmniGenerationScheduler(VLLMScheduler):
+class OmniGenerationScheduler(OmniSchedulerMixin, VLLMScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if VLLM_OMNI_USE_V2_RUNNER and not self.use_v2_model_runner:
@@ -125,9 +132,16 @@ class OmniGenerationScheduler(VLLMScheduler):
             scheduled_running_reqs.append(request)
             req_index += 1
 
-        # OMNI: Remove already finished requests from running queue
+        # Remove from running and propagate to finished_req_ids so the worker releases req_state slots.
         if already_finished_reqs:
             self.running = remove_all(self.running, already_finished_reqs)
+            for req in already_finished_reqs:
+                req_id = req.request_id
+                if req_id in self.finished_req_ids:
+                    continue
+                self.finished_req_ids.add(req_id)
+                if self.finished_req_ids_dict is not None:
+                    self.finished_req_ids_dict[req.client_index].add(req_id)
 
         # Fast path selection and scheduling (treat all as diffusion requests,
         # independent of pooling_params)
@@ -606,3 +620,11 @@ class OmniGenerationScheduler(VLLMScheduler):
             eco.scheduler_stats = stats
 
         return engine_core_outputs
+
+    def _update_request_as_session(self, session: Request, update: StreamingUpdate) -> None:
+        """
+        Override: Just replace the existing session with the next streaming update.
+
+        Do not expend prompt id using update.
+        """
+        self._replace_session_with_streaming_update(session, update)
