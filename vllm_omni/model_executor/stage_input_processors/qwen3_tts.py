@@ -6,7 +6,6 @@ import torch
 from vllm.logger import init_logger
 
 from vllm_omni.model_executor.stage_input_processors.chunk_size_utils import (
-    compute_dynamic_initial_chunk_size,
     max_ic_for_chunk_size,
 )
 from vllm_omni.model_executor.stage_input_processors.tts_utils import (
@@ -175,17 +174,29 @@ def talker2code2wav_async_chunk(
             initial_chunk_size = int(entry.list_data[0])
             per_request_override = True
 
-    # Dynamic IC: cache per request so boundaries stay stable for its lifetime.
+    # Per-request lifetime IC cache keeps boundaries stable. We previously used
+    # `compute_dynamic_initial_chunk_size` to scale IC with active load, but on
+    # L4 CI with 5 concurrent TTS requests this reliably returned IC=2. That
+    # means the adapter emits every 2 talker frames, feeding Code2Wav a
+    # continuously-growing code window (e.g. [ref_code(101) + codes(2..24)] for
+    # voice-clone, or [codes(2..24)] for CustomVoice). Each such call slices
+    # only 2 frames of NEW audio out of a much larger decoder forward whose
+    # receptive field sees different zero-padding near the slice boundary on
+    # every call (the CUDA-graph decoder pads non-matching sizes with zeros);
+    # those boundary artifacts accumulate into audible distortion —
+    # HNR≈0 dB + garbled Whisper transcript on build 1018 for both the Base
+    # voice-clone path and non-clone streams with several parallel requests.
+    # Force the largest power-of-2-below-chunk_size IC (e.g. 16 for
+    # chunk_size=25) which means at most one IC-phase emit per request; the
+    # remaining emits land on the normal chunk boundary. This trades a small
+    # amount of TTFA latency under low load for stable audio quality.
     if not per_request_override:
         _ic_cache = getattr(transfer_manager, "_cached_ic", None)
         if _ic_cache is None:
             _ic_cache = {}
             transfer_manager._cached_ic = _ic_cache
         if request_id not in _ic_cache:
-            max_ic = max_ic_for_chunk_size(chunk_size)
-            active = sum(1 for v in transfer_manager.code_prompt_token_ids.values() if len(v) > 0)
-            capacity = getattr(transfer_manager, "scheduler_max_num_seqs", 1)
-            _ic_cache[request_id] = compute_dynamic_initial_chunk_size(active, capacity, max_ic)
+            _ic_cache[request_id] = max_ic_for_chunk_size(chunk_size)
         initial_chunk_size = _ic_cache[request_id]
 
     if chunk_size <= 0 or left_context_size_config < 0 or initial_chunk_size < 0:
@@ -206,7 +217,7 @@ def talker2code2wav_async_chunk(
 
     if length <= 0:
         if finished:
-            logger.info(
+            logger.debug(
                 "[tts_async_chunk] tail-flush req=%s length=0 finished=True (empty payload)",
                 request_id,
             )
@@ -259,12 +270,12 @@ def talker2code2wav_async_chunk(
     num_frames = len(window_frames)
     code_predictor_codes = [window_frames[f][q] for q in range(num_quantizers) for f in range(num_frames)]
 
-    # L4 async_chunk diagnostic: trace each chunk adapter emission so we can
-    # reconstruct what Code2Wav is being fed per step on CI. The correlated
-    # "Code2Wav input_ids length N" log at the decoder side together with this
-    # per-emission record is enough to tell a real stream (prefix of >= Q*F
-    # frame-aligned tokens) from a degenerate decode-loop 1-token payload.
-    logger.info(
+    # Per-emission trace kept at DEBUG — build 1018 already pinned the L4
+    # regression to a too-small IC and this field-by-field record was enough
+    # to confirm the fix. Leaving the call in place (just demoted) makes it
+    # cheap to re-enable via VLLM_LOGGING_LEVEL=DEBUG next time streaming
+    # TTS audio quality needs to be triaged.
+    logger.debug(
         "[tts_async_chunk] emit req=%s length=%d ctx=%d left_ctx=%d "
         "ref_frames=%d num_frames=%d Q=%d flat_len=%d finished=%s in_initial=%s "
         "initial_ic=%d chunk_size=%d",

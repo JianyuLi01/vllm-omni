@@ -209,6 +209,17 @@ class DyninOmniToken2Text(DyninOmniStageBase):
     def _load_text_model(model_path: str, *, local_files_only: bool = False) -> Any:
         try:
             dynin_model_cls = get_dynin_modeling_attr("DyninOmniModelLM")
+            # transformers>=5.0 renamed the weight-tying manifest accessor from
+            # `_tied_weights_keys` (a class attribute) to `all_tied_weights_keys`
+            # (a property returning a {module_path: [tied_keys]} mapping) and
+            # invokes it during `from_pretrained -> caching_allocator_warmup
+            # -> get_total_byte_count`. Remote Dynin code pre-dates the rename,
+            # so patch a minimal shim onto the class if it's missing. Keeping
+            # the mapping empty is safe here — the root module has no weight
+            # tying; the real tied-weights (if any) live on nested submodules
+            # that transformers discovers via their own `_tied_weights_keys`.
+            if not hasattr(dynin_model_cls, "all_tied_weights_keys"):
+                dynin_model_cls.all_tied_weights_keys = property(lambda self: {})
             try:
                 return dynin_model_cls.from_pretrained(
                     model_path,
