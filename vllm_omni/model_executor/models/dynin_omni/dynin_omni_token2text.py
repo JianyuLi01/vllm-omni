@@ -220,6 +220,17 @@ class DyninOmniToken2Text(DyninOmniStageBase):
             # that transformers discovers via their own `_tied_weights_keys`.
             if not hasattr(dynin_model_cls, "all_tied_weights_keys"):
                 dynin_model_cls.all_tied_weights_keys = property(lambda self: {})
+            # transformers>=5.0 also calls `get_total_byte_count` which does
+            # `len(model._tp_plan)`; PreTrainedModel's class default for
+            # `_tp_plan` is `None`, and unless `self.config.base_model_tp_plan`
+            # was populated during __init__ (via `post_init`) the instance
+            # attribute remains None, crashing with
+            # `TypeError: object of type 'NoneType' has no len()`. The remote
+            # Dynin model class bypasses that path, so shim an empty dict at
+            # the class level as a safe fallback (PreTrainedModel sets the
+            # instance attribute when the config actually carries a plan).
+            if getattr(dynin_model_cls, "_tp_plan", None) is None:
+                dynin_model_cls._tp_plan = {}
             try:
                 return dynin_model_cls.from_pretrained(
                     model_path,
