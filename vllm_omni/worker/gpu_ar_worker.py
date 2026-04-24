@@ -12,6 +12,7 @@ from vllm.v1.worker.gpu_worker import init_worker_distributed_environment
 from vllm.v1.worker.utils import request_memory
 from vllm.v1.worker.workspace import init_workspace_manager
 
+from vllm_omni.diffusion.data import OmniACK, OmniSleepTask, OmniWakeTask
 from vllm_omni.worker.base import OmniGPUWorkerBase
 from vllm_omni.worker.gpu_ar_model_runner import GPUARModelRunner
 from vllm_omni.worker.mixins import OmniWorkerMixin
@@ -30,7 +31,7 @@ class GPUARWorker(OmniWorkerMixin, OmniGPUWorkerBase):
 
     @instrument(span_name="Init device")
     def init_device(self):
-        if self.device_config.device_type == "cuda":
+        if self.device_config.device_type in ("cuda", "musa"):
             # This env var set by Ray causes exceptions with graph building.
             os.environ.pop("NCCL_ASYNC_ERROR_HANDLING", None)
             parallel_config = self.parallel_config
@@ -53,7 +54,7 @@ class GPUARWorker(OmniWorkerMixin, OmniGPUWorkerBase):
                 assert self.local_rank < torch.cuda.device_count(), (
                     f"DP adjusted local rank {self.local_rank} is out of bounds. "
                 )
-                visible_device_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+                visible_device_count = torch.accelerator.device_count()
                 assert self.parallel_config.local_world_size <= visible_device_count, (
                     f"local_world_size ({self.parallel_config.local_world_size}) must "
                     f"be less than or equal to the number of visible devices "
@@ -136,7 +137,7 @@ class GPUARWorker(OmniWorkerMixin, OmniGPUWorkerBase):
         _orig = _gw.warmup_kernels
 
         def _noop(*a, **kw):
-            None
+            return None
 
         _gw.warmup_kernels = _noop
         # Also patch the module where it was originally defined
@@ -151,3 +152,23 @@ class GPUARWorker(OmniWorkerMixin, OmniGPUWorkerBase):
             _wm.warmup_kernels = _orig_wm
         logger.info("compile_or_warm_up_model: skipped warmup_kernels for Omni AR V2")
         return result
+
+    def handle_sleep_task(self, task: OmniSleepTask | dict) -> OmniACK:
+        """
+        Explicitly handle sleep commands.
+        Calls the implementation in the base class OmniGPUWorkerBase.
+        """
+        logger.debug(f"[AR Worker {self.rank}] Resolving handle_sleep_task dispatch")
+        if isinstance(task, dict):
+            task = OmniSleepTask(**task)
+        return super().handle_sleep_task(task)
+
+    def handle_wake_task(self, task: OmniWakeTask | dict) -> OmniACK:
+        """
+        Explicitly handle wake-up commands.
+        Calls the implementation in the base class OmniGPUWorkerBase.
+        """
+        logger.debug(f"[AR Worker {self.rank}] Resolving handle_wake_task dispatch")
+        if isinstance(task, dict):
+            task = OmniWakeTask(**task)
+        return super().handle_wake_task(task)
