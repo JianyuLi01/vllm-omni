@@ -551,23 +551,45 @@ class WorkerProc:
         custom_pipeline_args: dict[str, Any] | None = None,
     ) -> None:
         """Worker initialization and execution loops."""
+        # Mirror upstream vLLM MultiprocExecutor.worker_main: surface any
+        # initialization failure to the parent via the ready pipe instead of
+        # letting the subprocess die silently (which would leave the parent
+        # with only a cryptic EOFError on reader.recv()).
+        import traceback
+
         from vllm_omni.plugins import load_omni_general_plugins
 
-        load_omni_general_plugins()
-        worker_proc = WorkerProc(
-            od_config,
-            gpu_id=rank,
-            broadcast_handle=broadcast_handle,
-            worker_extension_cls=worker_extension_cls,
-            custom_pipeline_args=custom_pipeline_args,
-        )
-        logger.info(f"Worker {rank}: Scheduler loop started.")
-        pipe_writer.send(
-            {
-                "status": "ready",
-                "result_handle": worker_proc.result_mq_handle if rank == 0 else None,
-            }
-        )
+        worker_proc: WorkerProc | None = None
+        try:
+            load_omni_general_plugins()
+            worker_proc = WorkerProc(
+                od_config,
+                gpu_id=rank,
+                broadcast_handle=broadcast_handle,
+                worker_extension_cls=worker_extension_cls,
+                custom_pipeline_args=custom_pipeline_args,
+            )
+            logger.info(f"Worker {rank}: Scheduler loop started.")
+            pipe_writer.send(
+                {
+                    "status": "ready",
+                    "result_handle": worker_proc.result_mq_handle if rank == 0 else None,
+                }
+            )
+        except BaseException as exc:
+            logger.exception("Worker %s: initialization failed.", rank)
+            try:
+                pipe_writer.send(
+                    {
+                        "status": "failed",
+                        "error": repr(exc),
+                        "traceback": traceback.format_exc(),
+                    }
+                )
+            except Exception:
+                pass
+            raise
+
         worker_proc.worker_busy_loop()
         logger.info(f"Worker {rank}: Shutdown complete.")
 

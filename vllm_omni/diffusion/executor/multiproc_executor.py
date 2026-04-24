@@ -152,7 +152,15 @@ class MultiprocDiffusionExecutor(DiffusionExecutor):
                 raise
 
             if data["status"] != "ready":
-                raise RuntimeError("Initialization failed. Please see the error messages above.")
+                err = data.get("error") if isinstance(data, dict) else None
+                tb = data.get("traceback") if isinstance(data, dict) else None
+                if tb:
+                    logger.error("Rank %s worker initialization failed:\n%s", i, tb)
+                raise RuntimeError(
+                    f"Diffusion worker rank {i} initialization failed"
+                    + (f": {err}" if err else "")
+                    + ". See error messages above for details."
+                )
 
             if i == 0:
                 result_handle = data.get("result_handle")
