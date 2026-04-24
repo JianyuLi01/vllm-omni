@@ -80,11 +80,7 @@ class OmniBagelProcessor(BagelProcessor):
             image_kwargs.setdefault("return_tensors", "pt")
             pixel_values = self.image_processor(images, **image_kwargs)
 
-            text_inputs = (
-                self.tokenizer(text, **output_kwargs["text_kwargs"])
-                if text is not None
-                else None
-            )
+            text_inputs = self.tokenizer(text, **output_kwargs["text_kwargs"]) if text is not None else None
 
             if pixel_values is not None and text_inputs is not None:
                 combined = dict(text_inputs)

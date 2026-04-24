@@ -9,6 +9,11 @@ import torch
 import torch.nn as nn
 from transformers import ROPE_INIT_FUNCTIONS
 from transformers.cache_utils import Cache
+from vllm.model_executor.layers.linear import (
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
+    RowParallelLinear,
+)
 
 
 def _default_rope_init(config, device=None, seq_len=None, layer_type=None):
@@ -38,11 +43,7 @@ def _default_rope_init(config, device=None, seq_len=None, layer_type=None):
         float(rope_theta) ** (torch.arange(0, head_dim, 2, dtype=torch.float32, device=device) / head_dim)
     )
     return inv_freq, 1.0
-from vllm.model_executor.layers.linear import (
-    MergedColumnParallelLinear,
-    QKVParallelLinear,
-    RowParallelLinear,
-)
+
 
 # ---------------------------------------------------------------------------
 # Utilities (inlined from remote utils/model_utils.py)

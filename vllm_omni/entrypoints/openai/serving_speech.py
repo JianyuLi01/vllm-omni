@@ -1812,9 +1812,7 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
     def _diffusion_error_response(message: str, status_code: int = 500) -> Response:
         """Create a JSON error response without depending on OpenAIServing."""
         err_type = "invalid_request_error" if 400 <= status_code < 500 else "server_error"
-        error_body = json.dumps(
-            {"error": {"message": message, "type": err_type, "param": None, "code": status_code}}
-        )
+        error_body = json.dumps({"error": {"message": message, "type": err_type, "param": None, "code": status_code}})
         return Response(content=error_body, media_type="application/json", status_code=status_code)
 
     async def create_speech(

@@ -2454,9 +2454,7 @@ class OpenAIClientHandler:
                     # drains, yielding a transcript that is a prefix of the
                     # intended speech. Compare on the shared prefix so the
                     # audio/text agreement isn't masked by truncation.
-                    similarity = cosine_similarity_streaming_aligned(
-                        audio_content.lower(), text_content.lower()
-                    )
+                    similarity = cosine_similarity_streaming_aligned(audio_content.lower(), text_content.lower())
 
             # Populate result object
             result.text_content = text_content

@@ -120,10 +120,7 @@ class BagelRotaryEmbedding(nn.Module):
         rope_scaling = getattr(config, "rope_scaling", None) or {}
         rope_parameters = getattr(config, "rope_parameters", None) or {}
         rope_type = (
-            rope_scaling.get("rope_type")
-            or rope_scaling.get("type")
-            or rope_parameters.get("rope_type")
-            or "default"
+            rope_scaling.get("rope_type") or rope_scaling.get("type") or rope_parameters.get("rope_type") or "default"
         )
 
         if rope_type == "default":

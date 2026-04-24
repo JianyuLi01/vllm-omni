@@ -284,7 +284,10 @@ class Qwen3TTSCode2Wav(nn.Module):
         # boundary regression.
         info_keys = None
         if runtime_additional_information is not None:
-            info_keys = [sorted(info.keys()) if isinstance(info, dict) else type(info).__name__ for info in runtime_additional_information]
+            info_keys = [
+                sorted(info.keys()) if isinstance(info, dict) else type(info).__name__
+                for info in runtime_additional_information
+            ]
         logger.debug(
             "[code2wav_forward] enter batch=%d total_ids=%d per_req_lens=%s seq_counts=%s runtime_info=%s",
             len(request_ids_list),
