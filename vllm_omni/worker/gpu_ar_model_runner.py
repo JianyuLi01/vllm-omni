@@ -40,6 +40,7 @@ from vllm.v1.worker.utils import is_residual_scattered_for_sp
 from vllm_omni.data_entry_keys import flatten_payload
 from vllm_omni.distributed.omni_connectors.kv_transfer_manager import OmniKVTransferManager
 from vllm_omni.outputs import OmniModelRunnerOutput
+from vllm_omni.profiler.op_tracker import get_op_tracker
 from vllm_omni.utils.mm_outputs import build_mm_cpu, to_payload_element
 from vllm_omni.worker.gpu_model_runner import OmniGPUModelRunner
 from vllm_omni.worker.omni_connector_model_runner_mixin import OmniConnectorModelRunnerMixin
@@ -268,6 +269,16 @@ class GPUARModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin):
     ) -> OmniModelRunnerOutput | AsyncModelRunnerOutput | IntermediateTensors | None:
         if self.execute_model_state is not None:
             raise RuntimeError("State error: sample_tokens() must be called after execute_model() returns None.")
+
+        # [OpTracker] Lazy install + report on requests that finished in
+        # the previous step.  No-op when VLLM_OMNI_TRACK_OPS is unset.
+        op_tracker = get_op_tracker()
+        op_tracker.maybe_install()
+        if scheduler_output.finished_req_ids:
+            op_tracker.report_and_reset(
+                scheduler_output.finished_req_ids,
+                label="ar_model_runner",
+            )
 
         if not getattr(self, "_warmup_state_cleared", False):
             self._warmup_state_cleared = True
@@ -508,6 +519,7 @@ class GPUARModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin):
                 scheduler_output,
                 defer_finalize=defer_kv_connector_finalize,
             ) as kv_connector_output,
+            op_tracker.maybe_active(),  # [OpTracker] catches torch.ops calls
         ):
             model_output = self._model_forward(
                 input_ids=input_ids,
