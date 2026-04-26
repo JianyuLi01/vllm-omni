@@ -37,6 +37,7 @@ from vllm.v1.worker.ubatch_utils import maybe_create_ubatch_slices
 from vllm.v1.worker.utils import sanity_check_mm_encoder_outputs
 
 from vllm_omni.outputs import OmniModelRunnerOutput
+from vllm_omni.profiler.op_tracker import get_op_tracker
 from vllm_omni.worker.gpu_ar_model_runner import ExecuteModelState
 from vllm_omni.worker.gpu_model_runner import OmniGPUModelRunner
 from vllm_omni.worker.omni_connector_model_runner_mixin import OmniConnectorModelRunnerMixin
@@ -87,6 +88,16 @@ class GPUGenerationModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin
     ) -> OmniModelRunnerOutput | IntermediateTensors:
         if self.execute_model_state is not None:
             raise RuntimeError("State error: sample_tokens() must be called after execute_model() returns None.")
+
+        # [OpTracker] Lazy install + report on requests that finished in
+        # the previous step.  No-op when VLLM_OMNI_TRACK_OPS is unset.
+        op_tracker = get_op_tracker()
+        op_tracker.maybe_install()
+        if scheduler_output.finished_req_ids:
+            op_tracker.report_and_reset(
+                scheduler_output.finished_req_ids,
+                label="generation_model_runner",
+            )
 
         if self.routed_experts_initialized:
             capturer = RoutedExpertsCapturer.get_instance()
@@ -287,6 +298,7 @@ class GPUGenerationModelRunner(OmniGPUModelRunner, OmniConnectorModelRunnerMixin
                 scheduler_output,
                 defer_finalize=defer_kv_connector_finalize,
             ) as kv_connector_output,
+            op_tracker.maybe_active(),  # [OpTracker] catches torch.ops calls
         ):
             outputs = self._run_generation_model(
                 input_ids=input_ids,
