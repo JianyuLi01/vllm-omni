@@ -12,7 +12,7 @@ python text_to_video.py \
   --height 128 --width 128 --num-frames 9 \
   --guidance-scale 1.0 --guidance-scale-high 1.0 \
   --boundary-ratio 0.0 --flow-shift 12.0 \
-  --num-inference-steps 10 --fps 16 \
+  --num-inference-steps 40 --fps 16 \
   --output t2v_out.mp4 \
   --enforce-eager
 
