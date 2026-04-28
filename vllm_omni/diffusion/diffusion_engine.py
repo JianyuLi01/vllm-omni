@@ -403,6 +403,10 @@ class DiffusionEngine:
                 raise RuntimeError(f"Could not {action} profiler: {e}") from e
 
     def _dummy_run(self):
+        if os.environ.get("VLLM_OMNI_SKIP_DUMMY_RUN", "0") == "1":
+            logger.warning("Skipping diffusion dummy run because VLLM_OMNI_SKIP_DUMMY_RUN=1")
+            return
+
         """A dummy run to warm up the model."""
         num_inference_steps = 1
         height = 512
