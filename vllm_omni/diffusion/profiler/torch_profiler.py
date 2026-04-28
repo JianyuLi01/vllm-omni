@@ -5,7 +5,6 @@ import os
 import subprocess
 from contextlib import nullcontext
 
-import torch
 from torch.profiler import ProfilerActivity, profile
 from vllm.logger import init_logger
 
@@ -17,7 +16,8 @@ logger = init_logger(__name__)
 class TorchProfiler(ProfilerBase):
     """
     Torch-based profiler configured for End-to-End continuous recording.
-    Uses 'on_trace_ready' to handle Trace export.
+    Trace export is performed explicitly in stop() (not via on_trace_ready),
+    so no per-step prof.step() calls are required from the diffusion loop.
     Compression is offloaded to a background subprocess to avoid blocking the worker loop.
     """
 
@@ -32,7 +32,10 @@ class TorchProfiler(ProfilerBase):
         # 1. Cleanup any existing profiler
         if cls._profiler is not None:
             logger.warning("[Rank %s] Stopping existing Torch profiler", cls._get_rank())
-            cls._profiler.stop()
+            try:
+                cls._profiler.stop()
+            except Exception as e:
+                logger.warning("[Rank %s] Failed to stop existing profiler: %s", cls._get_rank(), e)
             cls._profiler = None
 
         rank = cls._get_rank()
@@ -48,43 +51,25 @@ class TorchProfiler(ProfilerBase):
 
         logger.info(f"[Rank {rank}] Starting End-to-End Torch profiler")
 
-        # 3. Define the on_trace_ready handler
-        def trace_handler(p):
-            nonlocal json_file
-
-            # A. Export JSON Trace
-            try:
-                p.export_chrome_trace(json_file)
-                logger.info(f"[Rank {rank}] Trace exported to {json_file}")
-
-                try:
-                    subprocess.Popen(["gzip", "-f", json_file])
-                    logger.info(f"[Rank {rank}] Triggered background compression for {json_file}")
-                    # Update variable to point to the eventual file
-                    json_file = f"{json_file}.gz"
-                except Exception as compress_err:
-                    logger.warning(f"[Rank {rank}] Background gzip failed to start: {compress_err}")
-
-            except Exception as e:
-                logger.warning(f"[Rank {rank}] Failed to export trace: {e}")
-
-        # 4. Initialize profiler with long active period
+        # 3. Initialize profiler in continuous (no-schedule) mode.
+        #
+        # Note: We intentionally do NOT use torch.profiler.schedule() with
+        # on_trace_ready here. That callback only fires after the schedule's
+        # active period completes, which requires explicit prof.step() calls
+        # from the diffusion loop. Those step() calls do not currently exist
+        # in this codebase, so relying on on_trace_ready would silently drop
+        # the trace (no .json / .json.gz produced) even though stop() reported
+        # success. Doing the export explicitly inside stop() guarantees the
+        # trace is written.
         cls._profiler = profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.XPU],
-            #activities=[ProfilerActivity.CPU],
-            schedule=torch.profiler.schedule(
-                wait=0,
-                warmup=5,
-                active=5,  # long capture window
-            ),
-            on_trace_ready=trace_handler,
             record_shapes=True,
             profile_memory=True,
             with_stack=True,
             with_flops=True,
         )
 
-        # 5. Start profiling
+        # 4. Start profiling
         cls._profiler.start()
 
         # Return the expected final path
@@ -99,19 +84,41 @@ class TorchProfiler(ProfilerBase):
 
         # Determine expected paths
         base_path = f"{cls._trace_template}_rank{rank}"
+        json_path = f"{base_path}.json"
         gz_path = f"{base_path}.json.gz"
 
-        try:
-            # This triggers trace_handler synchronously
-            # Since we removed table generation and backgrounded compression, this returns fast.
-            cls._profiler.stop()
-        except Exception as e:
-            logger.warning(f"[Rank {rank}] Profiler stop failed: {e}")
-
+        prof = cls._profiler
         cls._profiler = None
 
-        # We return the .gz path assuming background compression will succeed.
-        return {"trace": gz_path, "table": None}
+        try:
+            prof.stop()
+        except Exception as e:
+            logger.warning(f"[Rank {rank}] Profiler stop failed: {e}")
+            return {"trace": None, "table": None}
+
+        # Export the chrome trace explicitly. With no schedule/on_trace_ready,
+        # nothing else will write the trace file for us. The output directory
+        # was already created in start().
+        try:
+            prof.export_chrome_trace(json_path)
+            logger.info(f"[Rank {rank}] Trace exported to {json_path}")
+        except Exception as e:
+            logger.warning(f"[Rank {rank}] Failed to export trace: {e}")
+            return {"trace": None, "table": None}
+
+        # Compress to .json.gz in the background. If gzip is unavailable,
+        # fall back to returning the uncompressed .json path so the caller
+        # still gets a real file on disk.
+        try:
+            subprocess.Popen(["gzip", "-f", json_path])
+            logger.info(f"[Rank {rank}] Triggered background compression for {json_path}")
+            return {"trace": gz_path, "table": None}
+        except Exception as compress_err:
+            logger.warning(
+                f"[Rank {rank}] Background gzip failed to start: {compress_err}; "
+                f"returning uncompressed trace path"
+            )
+            return {"trace": json_path, "table": None}
 
     @classmethod
     def step(cls):
