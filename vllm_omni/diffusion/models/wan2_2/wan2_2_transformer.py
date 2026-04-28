@@ -995,6 +995,11 @@ class WanTransformer3DModel(nn.Module):
                 if weight_name not in original_name:
                     continue
                 lookup_name = original_name.replace(weight_name, param_name)
+
+                if lookup_name not in params_dict:
+                    logger.warning(f"Skipping weight {original_name} -> {lookup_name}")
+                    break
+
                 param = params_dict[lookup_name]
                 weight_loader = param.weight_loader
                 weight_loader(param, loaded_weight, shard_id)
