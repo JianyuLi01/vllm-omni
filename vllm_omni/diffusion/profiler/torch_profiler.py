@@ -74,8 +74,8 @@ class TorchProfiler(ProfilerBase):
             #activities=[ProfilerActivity.CPU],
             schedule=torch.profiler.schedule(
                 wait=0,
-                warmup=5,
-                active=5,  # long capture window
+                warmup=0,
+                active=100000,  # long capture window
             ),
             on_trace_ready=trace_handler,
             record_shapes=True,
