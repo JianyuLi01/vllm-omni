@@ -70,8 +70,8 @@ class TorchProfiler(ProfilerBase):
 
         # 4. Initialize profiler with long active period
         cls._profiler = profile(
-            #activities=[ProfilerActivity.CPU, ProfilerActivity.XPU],
-            activities=[ProfilerActivity.CPU],
+            activities=[ProfilerActivity.CPU, ProfilerActivity.XPU],
+            #activities=[ProfilerActivity.CPU],
             schedule=torch.profiler.schedule(
                 wait=0,
                 warmup=5,
