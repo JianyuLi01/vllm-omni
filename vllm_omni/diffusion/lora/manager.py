@@ -366,16 +366,12 @@ class DiffusionLoRAManager:
             fully_sharded_loras=False,
         )
 
-        for component_name in ("transformer", "transformer_2", "dit", "bagel"):
+        for component_name in ("transformer", "transformer_2", "dit"):
             if not hasattr(self.pipeline, component_name):
                 continue
             component = getattr(self.pipeline, component_name)
             if not isinstance(component, nn.Module):
                 continue
-
-            # Collect replacements first to avoid mutating the module tree
-            # while iterating over named_modules().
-            pending_replacements: list[tuple[str, str, nn.Module, list[str]]] = []
 
             for module_name, module in component.named_modules(remove_duplicate=False):
                 # Don't recurse into already-replaced LoRA wrappers. Their
@@ -405,9 +401,6 @@ class DiffusionLoRAManager:
                     if not should_replace:
                         continue
 
-                pending_replacements.append((module_name, full_module_name, module, packed_modules_list))
-
-            for module_name, full_module_name, module, packed_modules_list in pending_replacements:
                 lora_layer = from_layer_diffusion(
                     layer=module,
                     max_loras=1,

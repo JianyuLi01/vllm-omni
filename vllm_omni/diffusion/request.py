@@ -26,8 +26,6 @@ class OmniDiffusionRequest:
     sampling_params: OmniDiffusionSamplingParams
 
     request_ids: list[str] = field(default_factory=list)
-    request_id: str | None = None
-    kv_sender_info: dict | None = None
 
     def __post_init__(self):
         """Initialize dependent fields after dataclass initialization."""

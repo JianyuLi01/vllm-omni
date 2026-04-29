@@ -23,10 +23,12 @@ Coverage:
 
 import pytest
 
-from tests.helpers.mark import hardware_marks
-from tests.helpers.runtime import OmniServer, OmniServerParams, OpenAIClientHandler
-
-pytestmark = [pytest.mark.diffusion, pytest.mark.full_model]
+from tests.conftest import (
+    OmniServer,
+    OmniServerParams,
+    OpenAIClientHandler,
+)
+from tests.utils import hardware_marks
 
 MODEL = "Wan-AI/Wan2.1-VACE-1.3B-diffusers"
 PROMPT = "A cat walking slowly across a sunlit garden path"
@@ -133,6 +135,8 @@ def _get_vace_feature_cases():
     ]
 
 
+@pytest.mark.advanced_model
+@pytest.mark.diffusion
 @pytest.mark.parametrize(
     "omni_server",
     _get_vace_feature_cases(),

@@ -54,9 +54,6 @@ def _load_dac_codec(
     if "generator" in state_dict:
         state_dict = state_dict["generator"]
     codec.load_state_dict(state_dict, strict=False)
-    # Encoder path only uses encoder + quantizer.forward(); prune the
-    # decoder before moving to device to avoid unnecessary GPU allocation.
-    codec.decoder = None
     codec = codec.to(device=device, dtype=dtype)
     codec.eval()
 

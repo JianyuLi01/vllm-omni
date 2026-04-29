@@ -29,11 +29,14 @@ Features:
 ## Launch the Server
 
 ```bash
-vllm serve fishaudio/s2-pro --omni --port 8091
+vllm-omni serve fishaudio/s2-pro \
+    --stage-configs-path vllm_omni/model_executor/stage_configs/fish_speech_s2_pro.yaml \
+    --omni \
+    --port 8091 \
+    --trust-remote-code \
+    --enforce-eager \
+    --gpu-memory-utilization 0.9
 ```
-
-The deploy config is auto-loaded from `vllm_omni/deploy/fish_qwen3_omni.yaml`
-(the HF `model_type` on the fishaudio checkpoints is `fish_qwen3_omni`).
 
 Or use the convenience script:
 

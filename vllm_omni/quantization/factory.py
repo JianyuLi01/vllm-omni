@@ -43,16 +43,16 @@ def _build_int8(**kw: Any) -> QuantizationConfig:
 
 def _build_inc(**kw: Any) -> QuantizationConfig:
     """Lazy import for INC/AutoRound config with checkpoint kwarg normalization."""
-    from .inc_config import OmniINCConfig
+    from vllm.model_executor.layers.quantization.inc import INCConfig
 
     # Map checkpoint key 'bits' to INCConfig's 'weight_bits'
     if "bits" in kw and "weight_bits" not in kw:
         kw["weight_bits"] = kw.pop("bits")
 
     # Filter to only valid INCConfig params
-    valid = set(inspect.signature(OmniINCConfig.__init__).parameters) - {"self"}
+    valid = set(inspect.signature(INCConfig.__init__).parameters) - {"self"}
     filtered = {k: v for k, v in kw.items() if k in valid}
-    return OmniINCConfig(**filtered)
+    return INCConfig(**filtered)
 
 
 _OVERRIDES: dict[str, Callable[..., QuantizationConfig]] = {

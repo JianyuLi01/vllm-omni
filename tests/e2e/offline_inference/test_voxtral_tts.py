@@ -19,6 +19,7 @@ import os
 import uuid
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+os.environ["VLLM_TEST_CLEAN_GPU_MEMORY"] = "1"
 
 from pathlib import Path
 
@@ -29,13 +30,15 @@ from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from vllm import SamplingParams
 
-from tests.helpers.mark import hardware_test
-from tests.helpers.runtime import OmniRunner
-from tests.helpers.stage_config import get_deploy_config_path, modify_stage_config
+from tests.conftest import modify_stage_config
+from tests.utils import hardware_test
 from vllm_omni.entrypoints.async_omni import AsyncOmni
+from vllm_omni.entrypoints.omni import Omni
 
 MODEL = "mistralai/Voxtral-4B-TTS-2603"
-STAGE_CONFIG = get_deploy_config_path("voxtral_tts.yaml")
+STAGE_CONFIG = str(
+    Path(__file__).parent.parent.parent.parent / "vllm_omni" / "model_executor" / "stage_configs" / "voxtral_tts.yaml"
+)
 SAMPLE_RATE = 24000
 # Minimum expected audio samples for a short sentence (~0.04s of 24kHz audio)
 MIN_AUDIO_SAMPLES = 1000
@@ -64,9 +67,9 @@ def _resolve_stage_config(run_level: str) -> str:
         return modify_stage_config(
             STAGE_CONFIG,
             deletes={
-                "stages": {
-                    0: ["load_format"],
-                    1: ["load_format"],
+                "stage_args": {
+                    0: ["engine_args.load_format"],
+                    1: ["engine_args.load_format"],
                 }
             },
         )
@@ -80,12 +83,14 @@ def test_voxtral_tts_offline_basic(run_level):
     """Test basic Voxtral TTS offline inference with a voice preset."""
     stage_config = _resolve_stage_config(run_level)
 
-    with OmniRunner(
-        MODEL,
+    omni = Omni(
+        model=MODEL,
         stage_configs_path=stage_config,
+        stage_init_timeout=300,
         enforce_eager=True,
-    ) as runner:
-        omni = runner.omni
+    )
+
+    try:
         inputs = _compose_request(MODEL, TEST_TEXT, VOICE)
 
         sampling_params = SamplingParams(max_tokens=2500)
@@ -121,6 +126,9 @@ def test_voxtral_tts_offline_basic(run_level):
 
         # Verify audio isn't all zeros / silence
         assert np.max(np.abs(audio_array)) > 0.01, "Audio appears to be silence"
+
+    finally:
+        omni.close()
 
 
 @pytest.mark.advanced_model

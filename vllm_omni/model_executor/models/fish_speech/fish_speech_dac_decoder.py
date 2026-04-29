@@ -141,13 +141,6 @@ class FishSpeechDACDecoder(nn.Module):
         self._bake_weight_norm(codec)
         self._cache_attention_masks(codec)
 
-        # Decode path only uses quantizer.decode() + decoder; prune
-        # encode-only components before moving to device to avoid
-        # unnecessary GPU allocation.
-        codec.encoder = None
-        codec.quantizer.pre_module = None
-        codec.quantizer.downsample = None
-
         device = self.vllm_config.device_config.device
         codec = codec.to(device=device, dtype=torch.float32)
         codec.eval()
@@ -230,9 +223,8 @@ class FishSpeechDACDecoder(nn.Module):
             for i, info in enumerate(runtime_additional_information):
                 if i >= len(left_context_size):
                     break
-                meta = info.get("meta", {}) if isinstance(info, dict) else {}
-                if "left_context_size" in meta:
-                    left_context_size[i] = meta["left_context_size"]
+                if "left_context_size" in info:
+                    left_context_size[i] = info["left_context_size"]
 
         for i, req_ids in enumerate(request_ids_list):
             if req_ids.numel() < 1:

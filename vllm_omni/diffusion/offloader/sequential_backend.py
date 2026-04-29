@@ -210,10 +210,10 @@ class ModelLevelOffloadBackend(OffloadBackend):
         for enc in modules.encoders:
             enc.to(self.device)
 
-        # Move VAE(s) to GPU if available
-        for vae in modules.vaes:
+        # Move VAE to GPU if available
+        if modules.vae is not None:
             try:
-                vae.to(self.device, non_blocking=True)
+                modules.vae.to(self.device, non_blocking=True)
             except Exception as exc:
                 logger.debug("Failed to move VAE to GPU: %s", exc)
 
