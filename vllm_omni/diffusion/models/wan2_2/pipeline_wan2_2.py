@@ -316,13 +316,25 @@ class Wan22Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin, DiffusionPipe
                 )
             )
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model, subfolder="tokenizer", local_files_only=local_files_only)
-        self.text_encoder = UMT5EncoderModel.from_pretrained(
-            model, subfolder="text_encoder", torch_dtype=dtype, local_files_only=local_files_only
-        ).to(self.device)
-        self.vae = DistributedAutoencoderKLWan.from_pretrained(
-            model, subfolder="vae", torch_dtype=dtype, local_files_only=local_files_only
-        ).to(self.device)
+        self.transformer_only_profile = os.environ.get("VLLM_OMNI_WAN_PROFILE_TRANSFORMER_ONLY", "0") == "1"
+
+        if self.transformer_only_profile:
+            logger.warning(
+                "VLLM_OMNI_WAN_PROFILE_TRANSFORMER_ONLY=1: "
+                "skipping tokenizer, text_encoder and VAE loading. "
+                "This mode is only for transformer/operator profiling."
+            )
+            self.tokenizer = None
+            self.text_encoder = None
+            self.vae = None
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(model, subfolder="tokenizer", local_files_only=local_files_only)
+            self.text_encoder = UMT5EncoderModel.from_pretrained(
+                model, subfolder="text_encoder", torch_dtype=dtype, local_files_only=local_files_only
+            ).to(self.device)
+            self.vae = DistributedAutoencoderKLWan.from_pretrained(
+                model, subfolder="vae", torch_dtype=torch.float32, local_files_only=local_files_only
+            ).to(self.device)
 
         # Initialize transformers with correct config (weights loaded via load_weights)
         if load_transformer:
@@ -509,6 +521,11 @@ class Wan22Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin, DiffusionPipe
         height = req.sampling_params.height or height
         width = req.sampling_params.width or width
         num_frames = req.sampling_params.num_frames if req.sampling_params.num_frames else frame_num
+
+        if req.sampling_params.output_type is not None:
+            output_type = req.sampling_params.output_type
+        if os.environ.get("VLLM_OMNI_WAN_PROFILE_TRANSFORMER_ONLY", "0") == "1":
+            output_type = "latent"
 
         # Ensure dimensions are compatible with VAE and patch size
         # For expand_timesteps mode, we need latent dims to be even (divisible by patch_size)
@@ -820,6 +837,25 @@ class Wan22Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin, DiffusionPipe
         prompt = [prompt] if isinstance(prompt, str) else prompt
         prompt_clean = [self._prompt_clean(p) for p in prompt]
         batch_size = len(prompt_clean)
+
+        if (
+            os.environ.get("VLLM_OMNI_WAN_DUMMY_TEXT_ENCODER", "0") == "1"
+            or os.environ.get("VLLM_OMNI_WAN_PROFILE_TRANSFORMER_ONLY", "0") == "1"
+        ):
+            text_dim = self.transformer_config.text_dim
+            prompt_embeds = torch.zeros(
+                batch_size * num_videos_per_prompt,
+                max_sequence_length,
+                text_dim,
+                device=device,
+                dtype=dtype,
+            )
+
+            negative_prompt_embeds = None
+            if do_classifier_free_guidance:
+                negative_prompt_embeds = torch.zeros_like(prompt_embeds)
+
+            return prompt_embeds, negative_prompt_embeds
 
         text_inputs = self.tokenizer(
             prompt_clean,
