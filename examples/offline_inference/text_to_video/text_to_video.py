@@ -319,7 +319,6 @@ def main():
     if args.negative_prompt:
         prompt_dict["negative_prompt"] = args.negative_prompt
 
-    output_type = "latent"
     sampling_kwargs = dict(
         height=args.height,
         width=args.width,
@@ -327,7 +326,6 @@ def main():
         guidance_scale=args.guidance_scale,
         num_inference_steps=args.num_inference_steps,
         num_frames=args.num_frames,
-        output_type=output_type,
     )
     if args.guidance_scale_high is not None:
         sampling_kwargs["guidance_scale_2"] = args.guidance_scale_high
@@ -342,12 +340,6 @@ def main():
 
     # Print profiling results
     print(f"Total generation time: {generation_time:.4f} seconds ({generation_time * 1000:.2f} ms)")
-    if output_type == "latent":
-        if profiler_enabled:
-            print("\n[Profiler] Stopping profiler and collecting results...")
-            profile_results = omni.stop_profile()
-            print(profile_results)
-        return
 
     audio = None
     if isinstance(frames, list):
