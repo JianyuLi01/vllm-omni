@@ -381,9 +381,7 @@ class FluxSingleTransformerBlock(nn.Module):
         super().__init__()
         self.mlp_hidden_dim = int(dim * mlp_ratio)
 
-        # Modulation linear kept full precision; shift/scale/gate outputs
-        # are multiplied into the residual stream every block (see #2728).
-        self.norm = AdaLayerNormZeroSingle(dim, quant_config=None, prefix=f"{prefix}.norm")
+        self.norm = AdaLayerNormZeroSingle(dim, quant_config=quant_config, prefix=f"{prefix}.norm")
         self.proj_mlp = ReplicatedLinear(
             dim,
             self.mlp_hidden_dim,
@@ -512,7 +510,6 @@ class FluxTransformer2DModel(nn.Module):
     # -- typically a transformer layer
     # used for torch compile optimizations
     _repeated_blocks = ["FluxTransformerBlock"]
-    _layerwise_offload_blocks_attrs = ["transformer_blocks", "single_transformer_blocks"]
 
     @staticmethod
     def _is_transformer_block(name: str, module) -> bool:
@@ -526,10 +523,10 @@ class FluxTransformer2DModel(nn.Module):
 
     def __init__(
         self,
-        od_config: OmniDiffusionConfig | None = None,
+        od_config: OmniDiffusionConfig = None,
         patch_size: int = 1,
         in_channels: int = 64,
-        out_channels: int | None = None,
+        out_channels: int = None,
         num_layers: int = 19,
         num_single_layers: int = 38,
         attention_head_dim: int = 128,
@@ -565,16 +562,13 @@ class FluxTransformer2DModel(nn.Module):
         self.context_embedder = nn.Linear(joint_attention_dim, self.inner_dim)
         self.x_embedder = nn.Linear(in_channels, self.inner_dim)
 
-        # Dual-stream blocks kept full precision — FP8 on their joint
-        # attention path causes noise on FLUX (#2728). Single-stream
-        # blocks (38 vs 19) still get FP8 for memory savings.
         self.transformer_blocks = nn.ModuleList(
             [
                 FluxTransformerBlock(
                     dim=self.inner_dim,
                     num_attention_heads=num_attention_heads,
                     attention_head_dim=attention_head_dim,
-                    quant_config=None,
+                    quant_config=quant_config,
                     prefix=f"transformer_blocks.{i}",
                 )
                 for i in range(num_layers)
@@ -594,13 +588,12 @@ class FluxTransformer2DModel(nn.Module):
             ]
         )
 
-        # Final modulation feeds proj_out; keep full precision (see #2728).
         self.norm_out = AdaLayerNormContinuous(
             self.inner_dim,
             self.inner_dim,
             elementwise_affine=False,
             eps=1e-6,
-            quant_config=None,
+            quant_config=quant_config,
             prefix="norm_out",
         )
         self.proj_out = nn.Linear(self.inner_dim, patch_size * patch_size * self.out_channels, bias=True)

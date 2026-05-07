@@ -12,10 +12,13 @@ See docs/user_guide/diffusion_acceleration.md.
 
 import pytest
 
-from tests.helpers.mark import hardware_marks
-from tests.helpers.runtime import OmniServer, OmniServerParams, OpenAIClientHandler, dummy_messages_from_mix_data
-
-pytestmark = [pytest.mark.diffusion, pytest.mark.full_model]
+from tests.conftest import (
+    OmniServer,
+    OmniServerParams,
+    OpenAIClientHandler,
+    dummy_messages_from_mix_data,
+)
+from tests.utils import hardware_marks
 
 T2I_PROMPT = "A photo of a cat sitting on a laptop keyboard, digital art style."
 NEGATIVE_PROMPT = "blurry, low quality"
@@ -119,6 +122,8 @@ def _get_diffusion_feature_cases(model: str):
     ]
 
 
+@pytest.mark.advanced_model
+@pytest.mark.diffusion
 @pytest.mark.parametrize(
     "omni_server",
     _get_diffusion_feature_cases("Qwen/Qwen-Image"),
@@ -142,6 +147,8 @@ def test_qwen_image(omni_server: OmniServer, openai_client: OpenAIClientHandler)
     openai_client.send_diffusion_request(request_config)
 
 
+@pytest.mark.advanced_model
+@pytest.mark.diffusion
 @pytest.mark.parametrize(
     "omni_server",
     _get_diffusion_feature_cases("Qwen/Qwen-Image-2512"),

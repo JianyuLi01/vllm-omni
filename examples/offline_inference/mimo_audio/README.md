@@ -39,6 +39,7 @@ Run a single sample for basic TTS:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type tts_sft
 ```
@@ -47,6 +48,7 @@ Run batch samples for basic TTS:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type tts_sft \
   --num-prompts {batch_size}
@@ -64,6 +66,7 @@ Generate speech from text input:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type tts_sft \
   --text "The weather is so nice today."
@@ -75,6 +78,7 @@ Generate speech with explicit voice style instructions:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type tts_sft_with_instruct \
   --text "The weather is so nice today." \
@@ -87,6 +91,7 @@ Generate speech using an audio reference for voice cloning:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type tts_sft_with_audio \
   --text "The weather is so nice today." \
@@ -99,6 +104,7 @@ Generate speech from text containing natural voice descriptions:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type tts_sft_with_natural_instruction \
   --text "In a panting young male voice, he said: I can't run anymore, wait for me!"
@@ -110,6 +116,7 @@ Transcribe audio to text:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type audio_trancribing_sft \
   --audio-path "./spoken_dialogue_assistant_turn_1.wav"
@@ -121,6 +128,7 @@ Understand and analyze audio content with text queries:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type audio_understanding_sft \
   --text "Summarize the audio." \
@@ -133,6 +141,7 @@ Audio understanding with reasoning chain:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type audio_understanding_sft_with_thinking \
   --text "Summarize the audio." \
@@ -145,6 +154,7 @@ Multi-turn dialogue with audio input and output:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type spoken_dialogue_sft_multiturn \
   --audio-path "./prompt_speech_zh_m.wav"
@@ -158,6 +168,7 @@ Multi-turn dialogue converting speech to text:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type speech2text_dialogue_sft_multiturn
 ```
@@ -170,6 +181,7 @@ Multi-turn text-only dialogue:
 
 ```bash
 python3 -u end2end.py \
+  --stage-configs-path vllm_omni/model_executor/stage_configs/mimo_audio.yaml \
   --model-name XiaomiMiMo/MiMo-Audio-7B-Instruct \
   --query-type text_dialogue_sft_multiturn
 ```
@@ -177,6 +189,29 @@ python3 -u end2end.py \
 Note: This task uses hardcoded message lists in the script.
 
 ## Troubleshooting
+
+### Audio dependencies (soundfile, librosa)
+
+This example depends on **soundfile** (read/write WAV) and **librosa** (load audio including MP3). Install the project requirements first:
+
+```bash
+pip install -r requirements/common.txt
+# or at least: pip install soundfile>=0.13.1 librosa>=0.11.0
+```
+
+- **`soundfile` / libsndfile not found**  
+  `soundfile` uses the C library **libsndfile**. On Linux, install the system package before pip:
+  - Debian/Ubuntu: `sudo apt-get install libsndfile1`
+  - For development builds: `sudo apt-get install libsndfile1-dev`
+  - Then: `pip install soundfile`
+
+- **`librosa` fails to load MP3 or reports "No backend available"**  
+  Loading MP3 (e.g. in `spoken_dialogue_sft_multiturn` with `.mp3` files) uses **ffmpeg** as the backend. Install ffmpeg:
+  - Debian/Ubuntu: `sudo apt-get install ffmpeg`
+  - macOS: `brew install ffmpeg`
+
+- **`ImportError: No module named 'soundfile'` or `ModuleNotFoundError: ... librosa`**  
+  Ensure you are in the same Python environment where vLLM Omni and the example dependencies are installed, and that `requirements/common.txt` (or the packages above) are installed.
 
 ### Tokenizer path
 

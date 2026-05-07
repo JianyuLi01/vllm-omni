@@ -26,7 +26,7 @@ uv pip install vllm-omni
 
 # Optional if want to run Qwen3 TTS
 uv pip uninstall onnxruntime # should be removed before we can install onnxruntime-rocm
-uv pip install onnxruntime-rocm
+uv pip install onnxruntime-rocm sox
 ```
 
 # --8<-- [end:pre-built-wheels]

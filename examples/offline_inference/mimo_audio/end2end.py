@@ -182,7 +182,7 @@ def main(args):
 
     omni = Omni(
         model=model_name,
-        deploy_config=args.deploy_config,
+        stage_configs_path=args.stage_configs_path,
         log_stats=args.enable_stats,
         log_file=("omni_pipeline.log" if args.enable_stats else None),
         init_sleep_seconds=args.init_sleep_seconds,
@@ -309,10 +309,7 @@ def main(args):
             lines.append("Prompt:\n")
             lines.append(str(prompt_text) + "\n")
             lines.append("vllm_text_output:\n")
-            output_text = str(text_output)
-            if "<chinese>" in output_text or "<english>" in output_text:
-                output_text = output_text.replace("<chinese>", "").replace("<english>", "").strip()
-            lines.append(output_text + "\n")
+            lines.append(str(text_output).strip() + "\n")
             try:
                 with open(out_txt, "w", encoding="utf-8") as f:
                     print("lines", lines)
@@ -354,7 +351,7 @@ def parse_args():
         "--text",
         "-t",
         type=str,
-        default="",
+        default="The weather is so nice today.",
         help="input text",
     )
     parser.add_argument(
@@ -431,11 +428,10 @@ def parse_args():
         help="Sampling rate for audio.",
     )
     parser.add_argument(
-        "--deploy-config",
+        "--stage-configs-path",
         type=str,
-        default=None,
-        help="Override the deploy config path. If unset, auto-loads "
-        "vllm_omni/deploy/mimo_audio.yaml based on the HF model_type.",
+        default="../../../model_executor/stage_configs/mimo_audio.yaml",
+        help="Path to a stage configs file.",
     )
 
     return parser.parse_args()

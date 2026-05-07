@@ -8,10 +8,9 @@ import pytest
 import torch
 
 import vllm_omni.diffusion.worker.diffusion_model_runner as model_runner_module
-from tests.helpers.mark import hardware_test
 from vllm_omni.diffusion.worker.diffusion_model_runner import DiffusionModelRunner
 
-pytestmark = [pytest.mark.diffusion]
+pytestmark = [pytest.mark.core_model, pytest.mark.diffusion, pytest.mark.cpu]
 
 
 @contextmanager
@@ -65,8 +64,6 @@ def _make_runner(cache_backend, cache_backend_name: str, enable_cache_dit_summar
     return runner
 
 
-@pytest.mark.core_model
-@hardware_test(res={"cuda": "L4"}, num_cards=1)
 def test_execute_model_skips_cache_summary_without_active_cache_backend(monkeypatch):
     """Guard cache diagnostics with runtime backend state to avoid stale-config crashes."""
     runner = _make_runner(cache_backend=None, cache_backend_name="cache_dit")
@@ -87,8 +84,6 @@ def test_execute_model_skips_cache_summary_without_active_cache_backend(monkeypa
     assert cache_summary_calls == []
 
 
-@pytest.mark.core_model
-@hardware_test(res={"cuda": "L4"}, num_cards=1)
 def test_execute_model_emits_cache_summary_with_active_cache_dit_backend(monkeypatch):
     class _EnabledCacheBackend:
         def is_enabled(self):
@@ -112,8 +107,6 @@ def test_execute_model_emits_cache_summary_with_active_cache_dit_backend(monkeyp
     assert cache_summary_calls == [(runner.pipeline, True)]
 
 
-@pytest.mark.core_model
-@pytest.mark.cpu
 def test_load_model_clears_cache_backend_for_unsupported_pipeline(monkeypatch):
     class _DummyLoader:
         def __init__(self, load_config, od_config=None):

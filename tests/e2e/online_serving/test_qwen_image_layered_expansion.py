@@ -14,11 +14,15 @@ Total distinct features covered: cache_dit, Ulysses-SP, CFG-Parallel, layerwise-
 
 import pytest
 
-from tests.helpers.mark import hardware_marks
-from tests.helpers.media import decode_b64_image, generate_synthetic_image
-from tests.helpers.runtime import OmniServer, OmniServerParams, OpenAIClientHandler, dummy_messages_from_mix_data
-
-pytestmark = [pytest.mark.diffusion, pytest.mark.full_model]
+from tests.conftest import (
+    OmniServer,
+    OmniServerParams,
+    OpenAIClientHandler,
+    decode_b64_image,
+    dummy_messages_from_mix_data,
+    generate_synthetic_image,
+)
+from tests.utils import hardware_marks
 
 MODEL = "Qwen/Qwen-Image-Layered"
 EDIT_PROMPT = "Decompose this image into layers."
@@ -73,6 +77,8 @@ FEATURE_CASES = [
 ]
 
 
+@pytest.mark.advanced_model
+@pytest.mark.diffusion
 @pytest.mark.parametrize("omni_server", FEATURE_CASES, indirect=True)
 def test_feature(omni_server: OmniServer, openai_client: OpenAIClientHandler):
     """Test feature combinations with Qwen-Image-Layered."""
@@ -149,6 +155,8 @@ def _collect_image_url_items(openai_client: OpenAIClientHandler, request_config:
     return image_items
 
 
+@pytest.mark.advanced_model
+@pytest.mark.diffusion
 @pytest.mark.parametrize(
     "omni_server, expected_layers",
     LAYERS_GUARD_CASES,
@@ -222,6 +230,8 @@ PROMPT_CASES = [
 ]
 
 
+@pytest.mark.advanced_model
+@pytest.mark.diffusion
 @pytest.mark.parametrize("omni_server", PROMPT_CASES, indirect=True)
 def test_empty_prompt(omni_server: OmniServer, openai_client: OpenAIClientHandler):
     """Test feature combinations with Qwen-Image-Layered."""
